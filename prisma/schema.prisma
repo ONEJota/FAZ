@@ -1,0 +1,226 @@
+// FAZ — sistema de gestão exclusivo da Agência Mona
+// Banco PostgreSQL (Netlify DB / Neon).
+
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "rhel-openssl-3.0.x"]
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("NETLIFY_DB_URL")
+}
+
+// ---------- Pessoas ----------
+
+model User {
+  id          Int      @id @default(autoincrement())
+  name        String
+  email       String   @unique
+  password    String
+  role        String   @default("COLABORADOR") // ADMIN | COORDENACAO | COLABORADOR
+  hourlyCost  Float    @default(0) // custo por hora (R$) para rentabilidade
+  active      Boolean  @default(true)
+  color       String   @default("#E6007E")
+  createdAt   DateTime @default(now())
+
+  jobsResponsible JobResponsible[]
+  jobsRequested   Job[]           @relation("JobRequester")
+  tasks           Task[]
+  comments        Comment[]
+  timeEntries     TimeEntry[]
+  revisions       Revision[]
+  activities      Activity[]
+}
+
+// ---------- Cadastros ----------
+
+model Client {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique // nome fantasia, salvo sempre em MAIÚSCULAS
+  legalName String?
+  document  String?  // CNPJ/CPF
+  segment   String?
+  contactName  String?
+  contactEmail String?
+  contactPhone String?
+  notes     String?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  fees      Fee[]
+  campaigns Campaign[]
+  jobs      Job[]
+  timeEntries TimeEntry[]
+}
+
+model Fee {
+  id           Int       @id @default(autoincrement())
+  clientId     Int
+  client       Client    @relation(fields: [clientId], references: [id])
+  name         String
+  monthlyValue Float     // valor mensal (R$)
+  hoursPerMonth Float    @default(0) // horas contratadas/mês
+  startDate    DateTime
+  endDate      DateTime?
+  active       Boolean   @default(true)
+  notes        String?
+  createdAt    DateTime  @default(now())
+
+  campaigns Campaign[]
+  jobs      Job[]
+}
+
+model Campaign {
+  id        Int       @id @default(autoincrement())
+  clientId  Int
+  client    Client    @relation(fields: [clientId], references: [id])
+  feeId     Int?
+  fee       Fee?      @relation(fields: [feeId], references: [id])
+  name      String
+  startDate DateTime?
+  endDate   DateTime?
+  budget    Float     @default(0) // verba (R$)
+  briefing  String?
+  active    Boolean   @default(true)
+  createdAt DateTime  @default(now())
+
+  jobs Job[]
+}
+
+// Tabela de Serviços (peças) — nome único, com tempo padrão
+model Service {
+  id               Int     @id @default(autoincrement())
+  name             String  @unique
+  category         String  @default("Social")
+  defaultMinutes   Int     @default(60)
+  active           Boolean @default(true)
+
+  jobs Job[]
+}
+
+// Situações do fluxo (colunas do Kanban)
+model Status {
+  id        Int     @id @default(autoincrement())
+  name      String  @unique
+  order     Int
+  color     String  @default("#94a3b8")
+  isDone    Boolean @default(false) // situação final (concluído)
+  isWaiting Boolean @default(false) // em espera (não conta atraso)
+
+  jobs Job[]
+}
+
+// ---------- Jobs ----------
+
+model Job {
+  id          Int       @id @default(autoincrement())
+  number      Int       @unique // número sequencial do job
+  title       String
+  clientId    Int
+  client      Client    @relation(fields: [clientId], references: [id])
+  campaignId  Int?
+  campaign    Campaign? @relation(fields: [campaignId], references: [id])
+  feeId       Int?
+  fee         Fee?      @relation(fields: [feeId], references: [id])
+  serviceId   Int
+  service     Service   @relation(fields: [serviceId], references: [id])
+  statusId    Int
+  status      Status    @relation(fields: [statusId], references: [id])
+  requesterId Int?
+  requester   User?     @relation("JobRequester", fields: [requesterId], references: [id])
+
+  briefing         String   @default("")
+  links            String   @default("") // um link por linha
+  startDate        DateTime?
+  dueDate          DateTime
+  priority         Boolean  @default(false)
+  estimatedMinutes Int      @default(0)
+  rating           Int      @default(0) // 0–5 estrelas (complexidade)
+  completedAt      DateTime?
+  deletedAt        DateTime? // lixeira (só admin/coordenação)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  responsibles JobResponsible[]
+  tasks        Task[]
+  revisions    Revision[]
+  comments     Comment[]
+  timeEntries  TimeEntry[]
+  activities   Activity[]
+}
+
+model JobResponsible {
+  jobId  Int
+  job    Job  @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  userId Int
+  user   User @relation(fields: [userId], references: [id])
+
+  @@id([jobId, userId])
+}
+
+// Alterações / refações (A, B, C...) — motivo obrigatório
+model Revision {
+  id        Int      @id @default(autoincrement())
+  jobId     Int
+  job       Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  letter    String
+  reason    String   // CLIENTE_MUDOU | ERRO_INTERNO | BRIEFING_INCOMPLETO | AJUSTE_FINO | OUTRO
+  details   String   @default("")
+  createdById Int
+  createdBy User     @relation(fields: [createdById], references: [id])
+  createdAt DateTime @default(now())
+}
+
+model Task {
+  id         Int       @id @default(autoincrement())
+  jobId      Int
+  job        Job       @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  title      String
+  assigneeId Int?
+  assignee   User?     @relation(fields: [assigneeId], references: [id])
+  dueDate    DateTime?
+  done       Boolean   @default(false)
+  doneAt     DateTime?
+  createdAt  DateTime  @default(now())
+}
+
+model Comment {
+  id        Int      @id @default(autoincrement())
+  jobId     Int
+  job       Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id])
+  body      String
+  createdAt DateTime @default(now())
+}
+
+// ---------- Horas ----------
+
+model TimeEntry {
+  id          Int       @id @default(autoincrement())
+  userId      Int
+  user        User      @relation(fields: [userId], references: [id])
+  jobId       Int?
+  job         Job?      @relation(fields: [jobId], references: [id])
+  clientId    Int
+  client      Client    @relation(fields: [clientId], references: [id])
+  description String    @default("")
+  startedAt   DateTime
+  endedAt     DateTime? // null = cronômetro rodando
+  minutes     Int       @default(0)
+  hourlyCost  Float     @default(0) // custo/hora do usuário no momento do lançamento
+  createdAt   DateTime  @default(now())
+}
+
+// ---------- Histórico ----------
+
+model Activity {
+  id        Int      @id @default(autoincrement())
+  jobId     Int?
+  job       Job?     @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id])
+  action    String
+  createdAt DateTime @default(now())
+}

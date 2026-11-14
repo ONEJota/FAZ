@@ -1,0 +1,2 @@
+* text=auto eol=lf
+netlify/database/migrations/** -text
