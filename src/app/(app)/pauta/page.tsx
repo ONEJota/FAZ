@@ -1,13 +1,16 @@
 import Link from "next/link";
 import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
-import { requireUser } from "@/lib/auth";
+import { jobScope, requireUser } from "@/lib/auth";
 import { fmtShort, isLate } from "@/lib/format";
 import { PageHeader, StatusChip, Stat, Stars, Empty } from "@/components/ui";
 import { AvatarStack } from "@/components/Avatar";
 import { KanbanBoard, type Card, type Column } from "@/components/KanbanBoard";
 
-type SP = { view?: string; grupo?: string; cliente?: string; resp?: string; meus?: string; q?: string; concluidos?: string };
+type SP = { view?: string; grupo?: string; cliente?: string; resp?: string; meus?: string; q?: string; concluidos?: string; de?: string; ate?: string };
+
+const isDay = (v?: string) => !!v && v.length === 10 && !Number.isNaN(Date.parse(v));
+const ymd = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
 export default async function Pauta({ searchParams }: { searchParams: Promise<SP> }) {
   const sp = await searchParams;
@@ -16,7 +19,11 @@ export default async function Pauta({ searchParams }: { searchParams: Promise<SP
   const grupo = sp.grupo === "situacao" ? "situacao" : sp.grupo === "responsavel" ? "responsavel" : "prazo";
   const respId = sp.meus ? user.id : Number(sp.resp) || null;
 
-  const where: Prisma.JobWhereInput = { deletedAt: null };
+  // Colaborador só enxerga os jobs abertos para ele
+  const where: Prisma.JobWhereInput = { deletedAt: null, AND: [jobScope(user)] };
+  const de = isDay(sp.de) ? sp.de : undefined;
+  const ate = isDay(sp.ate) ? sp.ate : undefined;
+  if (de || ate) where.dueDate = { ...(de ? { gte: new Date(`${de}T00:00:00`) } : {}), ...(ate ? { lte: new Date(`${ate}T23:59:59.999`) } : {}) };
   if (!sp.concluidos) where.status = { isDone: false };
   if (sp.cliente) where.clientId = Number(sp.cliente);
   if (respId) where.responsibles = { some: { userId: respId } };
@@ -94,6 +101,14 @@ export default async function Pauta({ searchParams }: { searchParams: Promise<SP
     return `/pauta?${p.toString()}`;
   };
   const lateCount = cards.filter((c) => c.late).length;
+  const hoje = ymd(today);
+  const em7 = ymd(new Date(today.getTime() + 6 * 86400000));
+  const fimMes = ymd(new Date(today.getFullYear(), today.getMonth() + 1, 0));
+  const presets = [
+    { label: "Hoje", de: hoje, ate: hoje },
+    { label: "Próximos 7 dias", de: hoje, ate: em7 },
+    { label: "Até o fim do mês", de: hoje, ate: fimMes },
+  ];
 
   return (
     <>
@@ -129,10 +144,30 @@ export default async function Pauta({ searchParams }: { searchParams: Promise<SP
             {users.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
           </select>
         </div>
+        <div className="w-40">
+          <label className="label">Prazo de</label>
+          <input type="date" name="de" defaultValue={de} className="input" />
+        </div>
+        <div className="w-40">
+          <label className="label">Prazo até</label>
+          <input type="date" name="ate" defaultValue={ate} className="input" />
+        </div>
         <label className="flex items-center gap-2 pb-2 text-sm">
           <input type="checkbox" name="concluidos" value="1" defaultChecked={!!sp.concluidos} /> Incluir concluídos
         </label>
-        <button className="btn-ghost">Filtrar</button>
+        <button className="btn-primary">Filtrar</button>
+        <div className="flex w-full flex-wrap items-center gap-1.5">
+          <span className="mr-1 text-xs font-semibold uppercase text-black/45">Prazo</span>
+          {presets.map((p) => {
+            const on = de === p.de && ate === p.ate;
+            return (
+              <Link key={p.label} href={qs({ de: p.de, ate: p.ate })} className={`rounded-full px-3 py-1 text-xs font-semibold ${on ? "bg-ink text-white" : "bg-black/5 text-black/60 hover:bg-black/10"}`}>
+                {p.label}
+              </Link>
+            );
+          })}
+          {(de || ate) && <Link href={qs({ de: "", ate: "" })} className="text-xs text-mona hover:underline">limpar datas</Link>}
+        </div>
       </form>
 
       <div className="mb-4 flex flex-wrap items-center gap-2">

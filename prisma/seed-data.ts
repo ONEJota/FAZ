@@ -16,6 +16,7 @@ export const STATUSES = [
 export const SERVICES: [string, string, number][] = [
   ["Post estático", "Social", 60],
   ["Carrossel", "Social", 120],
+  ["Post animado", "Social", 120],
   ["Reels", "Vídeo", 180],
   ["Stories", "Social", 45],
   ["Vídeo", "Vídeo", 240],

@@ -36,7 +36,7 @@ Abra http://localhost:3000.
 ## Perfis
 - **Administrador:** tudo.
 - **Coordenação:** cadastros, fees, campanhas, peças, rentabilidade e lixeira.
-- **Colaborador:** jobs, pauta, as próprias horas. Não vê valores, rentabilidade nem lixeira.
+- **Colaborador:** só os jobs (PITs) em que é responsável ou tem tarefa, e dentro deles só as tarefas dele (ou sem dono, se for responsável); as próprias horas. Não vê valores, rentabilidade nem lixeira.
 
 ## Correções em relação ao SiGA (da auditoria)
 - Peça, prazo e responsável obrigatórios; o tempo estimado vem da tabela de peças.

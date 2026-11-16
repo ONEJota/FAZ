@@ -32,16 +32,18 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="min-h-screen">
-      <header className="sticky top-0 z-30 border-b border-black/5 bg-white/90 backdrop-blur">
-        <div className="mx-auto flex max-w-[1400px] flex-wrap items-center gap-x-4 gap-y-1 px-4 py-2 md:h-14 md:flex-nowrap md:py-0">
-          <Link href="/" className="text-2xl font-black tracking-tight text-mona">
-            FAZ<span className="text-ink/30">.</span>
+      <header className="sticky top-0 z-30 border-b-4 border-mona bg-ink text-white">
+        <div className="mx-auto flex max-w-[1400px] flex-wrap items-center gap-x-5 gap-y-2 px-4 py-2.5 lg:h-16 lg:flex-nowrap lg:py-0">
+          <Link href="/" className="flex shrink-0 items-center gap-2.5" aria-label="FAZ · Agência Mona">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/mona-logo-branco.png" alt="Agência Mona" width={81} height={27} className="h-[27px] w-auto" />
+            <span className="rounded-full bg-mona px-2 py-0.5 text-[11px] font-extrabold tracking-[.12em] text-white">FAZ</span>
           </Link>
-          <div className="order-last w-full min-w-0 md:order-none md:w-auto">
+          <div className="order-last -mx-1 w-full min-w-0 lg:order-none lg:mx-0 lg:w-auto">
             <NavLinks links={links} />
           </div>
           <div className="ml-auto flex items-center gap-3">
-            <Link href="/jobs/novo" className="btn-primary hidden sm:inline-flex">+ Job</Link>
+            <Link href="/jobs/novo" className="btn-primary hidden whitespace-nowrap sm:inline-flex">+ Job</Link>
             <Timer
               running={running ? { startedAt: running.startedAt.toISOString(), label: running.job ? `${running.job.number} · ${running.job.title}` : running.client.name } : null}
               jobs={myJobs.map((j) => ({ id: j.id, label: `${j.number} · ${j.title} — ${j.client.name}` }))}
@@ -50,7 +52,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               <summary className="flex cursor-pointer list-none items-center gap-2">
                 <Avatar name={user.name} color={user.color} />
               </summary>
-              <div className="absolute right-0 mt-2 w-56 rounded-xl border border-black/5 bg-white p-2 shadow-lg">
+              <div className="absolute right-0 mt-2 w-56 rounded-2xl border border-black/5 bg-white p-2 text-ink shadow-lg">
                 <div className="px-2 py-1.5">
                   <p className="text-sm font-semibold">{user.name}</p>
                   <p className="text-xs text-black/50">{ROLES[user.role as keyof typeof ROLES]}</p>
@@ -64,7 +66,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           </div>
         </div>
       </header>
-      <main className="mx-auto max-w-[1400px] px-4 py-6">{children}</main>
+      <main className="mx-auto max-w-[1400px] px-4 py-7">{children}</main>
     </div>
   );
 }

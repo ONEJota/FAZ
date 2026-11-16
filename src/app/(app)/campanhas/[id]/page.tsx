@@ -1,16 +1,16 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
-import { requireUser } from "@/lib/auth";
+import { jobScope, requireUser } from "@/lib/auth";
 import { fmtDate, fmtMinutes, fmtMoney, fmtShort, isLate } from "@/lib/format";
 import { PageHeader, Stat, StatusChip, Empty } from "@/components/ui";
 
 export default async function Campanha({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  await requireUser();
+  const user = await requireUser();
   const c = await db.campaign.findUnique({
     where: { id: Number(id) },
-    include: { client: true, fee: true, jobs: { where: { deletedAt: null }, include: { status: true, service: true, timeEntries: true }, orderBy: { dueDate: "asc" } } },
+    include: { client: true, fee: true, jobs: { where: { deletedAt: null, ...jobScope(user) }, include: { status: true, service: true, timeEntries: true }, orderBy: { dueDate: "asc" } } },
   });
   if (!c) notFound();
   const min = c.jobs.flatMap((j) => j.timeEntries).reduce((a, e) => a + e.minutes, 0);

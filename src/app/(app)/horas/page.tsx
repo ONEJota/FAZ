@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { db } from "@/lib/db";
-import { requireUser } from "@/lib/auth";
+import { jobScope, requireUser } from "@/lib/auth";
 import { fmtMinutes, fmtMoney, fmtShort, toInputDateTime } from "@/lib/format";
 import { queryHoras, type HorasSP } from "@/lib/horasQuery";
 import { addTimeEntry, deleteTimeEntry } from "@/app/actions/horas";
@@ -13,7 +13,7 @@ export default async function Horas({ searchParams }: { searchParams: Promise<Ho
   const [users, clients, jobs] = await Promise.all([
     db.user.findMany({ where: { active: true }, orderBy: { name: "asc" } }),
     db.client.findMany({ where: { active: true }, orderBy: { name: "asc" } }),
-    db.job.findMany({ where: { deletedAt: null, status: { isDone: false } }, include: { client: true }, orderBy: { number: "desc" }, take: 300 }),
+    db.job.findMany({ where: { deletedAt: null, status: { isDone: false }, ...jobScope(user) }, include: { client: true }, orderBy: { number: "desc" }, take: 300 }),
   ]);
 
   const total = entries.reduce((a, e) => a + e.minutes, 0);

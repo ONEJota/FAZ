@@ -1,17 +1,17 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
-import { isManager, requireUser } from "@/lib/auth";
+import { canSeeTask, isManager, requireJobAccess } from "@/lib/auth";
 import { fmtDateTime, fmtMinutes, fmtShort, isLate, REVISION_REASONS, toInputDateTime } from "@/lib/format";
 import { ErrorBanner, Stars, StatusChip, Tabs, Empty } from "@/components/ui";
 import { Avatar } from "@/components/Avatar";
-import { addComment, addRevision, addTask, duplicateJob, restoreJob, setJobStatusForm, toggleTask, trashJob } from "@/app/actions/jobs";
+import { addComment, addRevision, addTask, deleteJobImage, duplicateJob, restoreJob, setJobStatusForm, toggleTask, trashJob, uploadJobImages } from "@/app/actions/jobs";
 import { addTimeEntry, deleteTimeEntry, startTimer } from "@/app/actions/horas";
 
 export default async function JobPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ aba?: string; erro?: string }> }) {
   const { id } = await params;
   const sp = await searchParams;
-  const user = await requireUser();
+  const user = await requireJobAccess(Number(id));
   const manager = isManager(user);
   const job = await db.job.findUnique({
     where: { id: Number(id) },
@@ -23,9 +23,13 @@ export default async function JobPage({ params, searchParams }: { params: Promis
       comments: { include: { user: true }, orderBy: { createdAt: "asc" } },
       timeEntries: { include: { user: true }, orderBy: { startedAt: "desc" } },
       activities: { include: { user: true }, orderBy: { createdAt: "desc" }, take: 50 },
+      images: { select: { id: true, name: true, size: true, uploadedById: true, createdAt: true, uploadedBy: { select: { name: true } } }, orderBy: { createdAt: "desc" } },
     },
   });
   if (!job) notFound();
+  // Colaborador vê só as tarefas abertas para ele
+  const responsibleIds = job.responsibles.map((r) => r.userId);
+  job.tasks = job.tasks.filter((t) => canSeeTask(user, t, responsibleIds));
   const [statuses, users] = await Promise.all([
     db.status.findMany({ orderBy: { order: "asc" } }),
     db.user.findMany({ where: { active: true }, orderBy: { name: "asc" } }),
@@ -58,7 +62,7 @@ export default async function JobPage({ params, searchParams }: { params: Promis
       </div>
       <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-extrabold tracking-tight">
+          <h1 className="display text-3xl">
             <span className="text-mona">#{job.number}</span> {job.title}
             {job.revisions.length > 0 && <span className="ml-2 align-middle text-base font-bold text-black/40">{job.revisions.at(-1)!.letter}</span>}
           </h1>
@@ -89,6 +93,7 @@ export default async function JobPage({ params, searchParams }: { params: Promis
         items={[
           { key: "resumo", label: "Resumo" },
           { key: "tarefas", label: "Tarefas", count: job.tasks.filter((t) => !t.done).length },
+          { key: "imagens", label: "Imagens", count: job.images.length },
           { key: "alteracoes", label: "Alterações", count: job.revisions.length },
           { key: "comentarios", label: "Comentários", count: job.comments.length },
           { key: "horas", label: "Horas", count: undefined },
@@ -188,6 +193,44 @@ export default async function JobPage({ params, searchParams }: { params: Promis
             </ul>
           )}
         </section>
+      )}
+
+      {aba === "imagens" && (
+        <div className="grid gap-5 lg:grid-cols-3">
+          <form action={uploadJobImages} className="card h-fit space-y-3 p-5">
+            <input type="hidden" name="jobId" value={job.id} />
+            <h2 className="font-bold">Anexar imagens</h2>
+            <input type="file" name="images" accept="image/jpeg,image/png,image/webp,image/gif" multiple required className="input file:mr-3 file:rounded-full file:border-0 file:bg-mona file:px-3 file:py-1 file:text-xs file:font-semibold file:text-white" />
+            <button className="btn-primary w-full">Enviar</button>
+            <p className="text-xs text-black/45">JPG, PNG, WEBP ou GIF, até 4 MB por envio. Para arquivos maiores, use um link do Drive no campo Links.</p>
+          </form>
+          <section className="lg:col-span-2">
+            {job.images.length === 0 ? <div className="card"><Empty>Nenhuma imagem anexada.</Empty></div> : (
+              <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                {job.images.map((img) => {
+                  const src = `${base}/imagens/${img.id}`;
+                  return (
+                    <li key={img.id} className="card overflow-hidden">
+                      <a href={src} target="_blank" rel="noreferrer" className="block aspect-square bg-black/[.04]">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={src} alt={img.name} loading="lazy" className="h-full w-full object-cover" />
+                      </a>
+                      <div className="flex items-start justify-between gap-2 p-2.5">
+                        <div className="min-w-0">
+                          <p className="truncate text-xs font-semibold" title={img.name}>{img.name}</p>
+                          <p className="text-[11px] text-black/45">{img.uploadedBy.name} · {fmtShort(img.createdAt)}</p>
+                        </div>
+                        {(img.uploadedById === user.id || manager) && (
+                          <form action={deleteJobImage}><input type="hidden" name="imageId" value={img.id} /><button className="text-xs text-red-500 hover:underline">excluir</button></form>
+                        )}
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </section>
+        </div>
       )}
 
       {aba === "alteracoes" && (

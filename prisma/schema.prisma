@@ -23,6 +23,7 @@ model User {
   active      Boolean  @default(true)
   color       String   @default("#E6007E")
   createdAt   DateTime @default(now())
+  deletedAt   DateTime? // usuário excluído (mantido só para o histórico)
 
   jobsResponsible JobResponsible[]
   jobsRequested   Job[]           @relation("JobRequester")
@@ -31,6 +32,7 @@ model User {
   timeEntries     TimeEntry[]
   revisions       Revision[]
   activities      Activity[]
+  jobImages       JobImage[]
 }
 
 // ---------- Cadastros ----------
@@ -148,6 +150,23 @@ model Job {
   comments     Comment[]
   timeEntries  TimeEntry[]
   activities   Activity[]
+  images       JobImage[]
+}
+
+// Imagens anexadas ao job (PIT): referências, artes, prints de aprovação
+model JobImage {
+  id           Int      @id @default(autoincrement())
+  jobId        Int
+  job          Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  name         String
+  mimeType     String
+  size         Int
+  data         Bytes
+  uploadedById Int
+  uploadedBy   User     @relation(fields: [uploadedById], references: [id])
+  createdAt    DateTime @default(now())
+
+  @@index([jobId])
 }
 
 model JobResponsible {

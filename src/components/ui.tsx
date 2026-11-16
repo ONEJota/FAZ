@@ -17,8 +17,8 @@ export function PageHeader({ title, subtitle, children }: { title: string; subti
   return (
     <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
       <div>
-        <h1 className="text-2xl font-extrabold tracking-tight">{title}</h1>
-        {subtitle && <p className="text-sm text-black/55">{subtitle}</p>}
+        <h1 className="display text-3xl md:text-4xl">{title}<span className="text-mona">.</span></h1>
+        {subtitle && <p className="mt-1.5 text-sm text-black/55">{subtitle}</p>}
       </div>
       <div className="flex flex-wrap gap-2">{children}</div>
     </div>
@@ -28,9 +28,9 @@ export function PageHeader({ title, subtitle, children }: { title: string; subti
 export function Stat({ label, value, tone }: { label: string; value: React.ReactNode; tone?: "bad" | "good" | "warn" }) {
   const c = tone === "bad" ? "text-red-600" : tone === "good" ? "text-green-600" : tone === "warn" ? "text-amber-600" : "text-ink";
   return (
-    <div className="card px-4 py-3">
-      <p className={`text-2xl font-extrabold ${c}`}>{value}</p>
-      <p className="text-xs font-medium text-black/50">{label}</p>
+    <div className="card px-4 py-3.5">
+      <p className={`text-3xl font-extrabold tracking-tight ${c}`}>{value}</p>
+      <p className="mt-0.5 text-[11px] font-bold uppercase tracking-[.08em] text-black/45">{label}</p>
     </div>
   );
 }

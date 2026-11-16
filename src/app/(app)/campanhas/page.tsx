@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { db } from "@/lib/db";
-import { isManager, requireUser } from "@/lib/auth";
+import { isManager, jobScope, requireUser } from "@/lib/auth";
 import { fmtDate, fmtMinutes, fmtMoney } from "@/lib/format";
 import { saveCampaign } from "@/app/actions/cadastros";
 import { PageHeader, Empty } from "@/components/ui";
@@ -12,7 +12,7 @@ export default async function Campanhas({ searchParams }: { searchParams: Promis
   const [campaigns, clients] = await Promise.all([
     db.campaign.findMany({
       where: sp.todas ? {} : { active: true },
-      include: { client: true, fee: true, jobs: { where: { deletedAt: null }, include: { status: true, timeEntries: true } } },
+      include: { client: true, fee: true, jobs: { where: { deletedAt: null, ...jobScope(user) }, include: { status: true, timeEntries: true } } },
       orderBy: [{ startDate: "desc" }, { createdAt: "desc" }],
     }),
     db.client.findMany({ where: { active: true }, orderBy: { name: "asc" }, include: { fees: { where: { active: true } } } }),

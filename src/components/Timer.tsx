@@ -22,25 +22,25 @@ export function Timer({ running, jobs }: Props) {
     const mm = String(Math.floor((secs % 3600) / 60)).padStart(2, "0");
     const ss = String(secs % 60).padStart(2, "0");
     return (
-      <form action={stopTimer} className="flex items-center gap-2 rounded-lg bg-green-50 py-1 pl-3 pr-1 ring-1 ring-green-200">
-        <span className="h-2 w-2 animate-pulse rounded-full bg-green-500" />
-        <span className="hidden max-w-40 truncate text-xs text-green-900 sm:inline" title={running.label}>{running.label}</span>
-        <span className="font-mono text-sm font-bold text-green-800">{hh}:{mm}:{ss}</span>
-        <button className="rounded-md bg-green-600 px-2 py-1 text-xs font-semibold text-white hover:bg-green-700">Parar</button>
+      <form action={stopTimer} className="flex items-center gap-2 rounded-full bg-white/10 py-1 pl-3 pr-1 ring-1 ring-white/15">
+        <span className="h-2 w-2 animate-pulse rounded-full bg-green-400" />
+        <span className="hidden max-w-40 truncate text-xs text-white/70 sm:inline" title={running.label}>{running.label}</span>
+        <span className="font-mono text-sm font-bold text-white">{hh}:{mm}:{ss}</span>
+        <button className="rounded-full bg-mona px-3 py-1 text-xs font-bold text-white hover:bg-mona-dark">Parar</button>
       </form>
     );
   }
 
   return (
     <div className="relative">
-      <button onClick={() => setOpen(!open)} className="btn-ghost whitespace-nowrap" type="button">⏱<span className="hidden sm:inline"> Iniciar horas</span></button>
+      <button onClick={() => setOpen(!open)} className="btn whitespace-nowrap border border-white/20 text-white hover:bg-white/10" type="button">⏱<span className="hidden sm:inline"> Iniciar horas</span></button>
       {open && (
         <form
           action={async (f) => {
             await startTimer(f);
             setOpen(false);
           }}
-          className="absolute right-0 z-40 mt-2 w-[min(24rem,calc(100vw-2rem))] space-y-3 rounded-xl border border-black/5 bg-white p-4 shadow-lg"
+          className="absolute right-0 z-40 mt-2 w-[min(24rem,calc(100vw-2rem))] space-y-3 rounded-2xl border border-black/5 bg-white p-4 text-ink shadow-lg"
         >
           <div>
             <label className="label">Job</label>

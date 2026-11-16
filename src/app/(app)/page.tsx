@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { db } from "@/lib/db";
-import { requireUser } from "@/lib/auth";
+import { jobScope, requireUser } from "@/lib/auth";
 import { fmtMinutes, fmtShort, isLate } from "@/lib/format";
 import { ErrorBanner, PageHeader, Stat, StatusChip, Empty } from "@/components/ui";
 import { Avatar } from "@/components/Avatar";
@@ -25,7 +25,7 @@ export default async function Painel({ searchParams }: { searchParams: Promise<{
   });
   const week = await db.timeEntry.findMany({ where: { userId: user.id, startedAt: { gte: weekStart }, endedAt: { not: null } } });
   const comments = await db.comment.findMany({
-    where: { job: { deletedAt: null, responsibles: { some: { userId: user.id } } } },
+    where: { job: { deletedAt: null, responsibles: { some: { userId: user.id } }, ...jobScope(user) } },
     include: { user: true, job: true },
     orderBy: { createdAt: "desc" },
     take: 8,

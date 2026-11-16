@@ -2,7 +2,8 @@ import Link from "next/link";
 import { db } from "@/lib/db";
 import { requireManager, ROLES } from "@/lib/auth";
 import { fmtDateTime, fmtMinutes, fmtMoney } from "@/lib/format";
-import { saveService, saveStatus, saveUser } from "@/app/actions/cadastros";
+import { deleteUser, saveService, saveStatus, saveUser } from "@/app/actions/cadastros";
+import { ConfirmButton } from "@/components/ConfirmButton";
 import { restoreJob } from "@/app/actions/jobs";
 import { ErrorBanner, PageHeader, StatusChip, Tabs, Empty } from "@/components/ui";
 
@@ -26,7 +27,7 @@ export default async function Config({ searchParams }: { searchParams: Promise<{
       <Tabs base="/config" current={aba} items={items} />
       {aba === "servicos" && <Servicos editId={editId} />}
       {aba === "situacoes" && admin && <Situacoes editId={editId} />}
-      {aba === "usuarios" && admin && <Usuarios editId={editId} />}
+      {aba === "usuarios" && admin && <Usuarios editId={editId} meId={user.id} />}
       {aba === "lixeira" && <Lixeira />}
     </>
   );
@@ -102,8 +103,8 @@ async function Situacoes({ editId }: { editId: number }) {
   );
 }
 
-async function Usuarios({ editId }: { editId: number }) {
-  const users = await db.user.findMany({ orderBy: [{ active: "desc" }, { name: "asc" }] });
+async function Usuarios({ editId, meId }: { editId: number; meId: number }) {
+  const users = await db.user.findMany({ where: { deletedAt: null }, orderBy: [{ active: "desc" }, { name: "asc" }] });
   const e = users.find((u) => u.id === editId);
   return (
     <div className="grid gap-5 lg:grid-cols-3">
@@ -124,6 +125,14 @@ async function Usuarios({ editId }: { editId: number }) {
         <div className="flex gap-2"><button className="btn-primary">Salvar</button>{e && <Link href="/config?aba=usuarios" className="btn-ghost">Cancelar</Link>}</div>
         <p className="text-xs text-black/45">Custo/hora = salário + encargos ÷ horas trabalhadas no mês. É usado na rentabilidade.</p>
       </form>
+      {e && e.id !== meId && (
+        <form action={deleteUser} className="card h-fit space-y-2 border-red-200 p-5 lg:col-start-1">
+          <input type="hidden" name="id" value={e.id} />
+          <h2 className="font-bold text-red-700">Excluir usuário</h2>
+          <p className="text-xs text-black/55">{e.name} perde o acesso e sai das equipes dos jobs e das tarefas abertas. Horas e comentários já lançados continuam nos relatórios.</p>
+          <ConfirmButton className="btn-danger w-full" message={`Excluir ${e.name}? Essa ação não pode ser desfeita.`}>Excluir {e.name.split(" ")[0]}</ConfirmButton>
+        </form>
+      )}
       <section className="card overflow-x-auto lg:col-span-2">
         <table className="w-full">
           <thead><tr><th className="th">Nome</th><th className="th">E-mail</th><th className="th">Perfil</th><th className="th text-right">Custo/h</th><th className="th" /></tr></thead>
@@ -134,7 +143,15 @@ async function Usuarios({ editId }: { editId: number }) {
                 <td className="td text-black/60">{u.email}</td>
                 <td className="td">{ROLES[u.role as keyof typeof ROLES]}</td>
                 <td className={`td text-right ${u.hourlyCost ? "" : "text-amber-600"}`}>{u.hourlyCost ? fmtMoney(u.hourlyCost) : "não definido"}</td>
-                <td className="td text-right"><Link href={`/config?aba=usuarios&edit=${u.id}`} className="text-xs text-mona hover:underline">editar</Link></td>
+                <td className="td whitespace-nowrap text-right">
+                  <Link href={`/config?aba=usuarios&edit=${u.id}`} className="text-xs text-mona hover:underline">editar</Link>
+                  {u.id !== meId && (
+                    <form action={deleteUser} className="ml-3 inline">
+                      <input type="hidden" name="id" value={u.id} />
+                      <ConfirmButton className="text-xs text-red-500 hover:underline" message={`Excluir ${u.name}? Essa ação não pode ser desfeita.`}>excluir</ConfirmButton>
+                    </form>
+                  )}
+                </td>
               </tr>
             ))}
           </tbody>

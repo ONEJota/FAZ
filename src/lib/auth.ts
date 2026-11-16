@@ -1,6 +1,7 @@
 import "server-only";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import type { Prisma } from "@prisma/client";
 import { db } from "./db";
 import { readSession, SESSION_COOKIE } from "./session";
 
@@ -28,6 +29,37 @@ export function isManager(u: { role: string }) {
 export async function requireManager() {
   const u = await requireUser();
   if (!isManager(u)) redirect("/?erro=permissao");
+  return u;
+}
+
+/**
+ * Jobs (PITs) que o usuário pode ver. Admin e Coordenação veem todos;
+ * o Colaborador vê só os jobs em que é responsável ou tem tarefa atribuída.
+ */
+export function jobScope(u: { id: number; role: string }): Prisma.JobWhereInput {
+  if (isManager(u)) return {};
+  return { OR: [{ responsibles: { some: { userId: u.id } } }, { tasks: { some: { assigneeId: u.id } } }] };
+}
+
+/** Tarefas visíveis: o Colaborador vê as atribuídas a ele e as sem dono dos jobs em que é responsável. */
+export function canSeeTask(
+  u: { id: number; role: string },
+  t: { assigneeId: number | null },
+  responsibleIds: number[],
+) {
+  if (isManager(u)) return true;
+  return t.assigneeId === u.id || (t.assigneeId === null && responsibleIds.includes(u.id));
+}
+
+export async function canAccessJob(u: { id: number; role: string }, jobId: number) {
+  if (isManager(u)) return true;
+  return (await db.job.count({ where: { id: jobId, ...jobScope(u) } })) > 0;
+}
+
+/** Bloqueia o acesso a um job que o usuário não pode ver (páginas e ações). */
+export async function requireJobAccess(jobId: number) {
+  const u = await requireUser();
+  if (!jobId || !(await canAccessJob(u, jobId))) redirect("/?erro=permissao");
   return u;
 }
 

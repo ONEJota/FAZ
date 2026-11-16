@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
-import { isManager, requireUser } from "@/lib/auth";
+import { isManager, jobScope, requireUser } from "@/lib/auth";
 import { fmtDate, fmtMinutes, fmtMoney, fmtShort, isLate, toInputDate } from "@/lib/format";
 import { monthRange, profitByClient } from "@/lib/rentabilidade";
 import { saveCampaign, saveFee } from "@/app/actions/cadastros";
@@ -18,7 +18,7 @@ export default async function ClientePage({ params, searchParams }: { params: Pr
     include: {
       fees: { orderBy: { startDate: "desc" } },
       campaigns: { include: { fee: true, _count: { select: { jobs: true } } }, orderBy: { createdAt: "desc" } },
-      jobs: { where: { deletedAt: null }, include: { status: true, service: true }, orderBy: { dueDate: "desc" }, take: 100 },
+      jobs: { where: { deletedAt: null, ...jobScope(user) }, include: { status: true, service: true }, orderBy: { dueDate: "desc" }, take: 100 },
     },
   });
   if (!client) notFound();

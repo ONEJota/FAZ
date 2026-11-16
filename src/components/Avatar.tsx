@@ -5,7 +5,7 @@ export function Avatar({ name, color, size = 32 }: { name: string; color?: strin
     <span
       title={name}
       className="inline-flex shrink-0 items-center justify-center rounded-full font-bold text-white ring-2 ring-white"
-      style={{ width: size, height: size, background: color || "#E6007E", fontSize: size * 0.38 }}
+      style={{ width: size, height: size, background: color || "#f10a64", fontSize: size * 0.38 }}
     >
       {initials(name)}
     </span>

@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { requireAdmin, requireManager } from "@/lib/auth";
 
+
 const s = (f: FormData, k: string) => String(f.get(k) ?? "").trim();
 const opt = (f: FormData, k: string) => s(f, k) || null;
 const num = (f: FormData, k: string) => {
@@ -144,6 +145,45 @@ export async function saveUser(form: FormData) {
     if (pw.length < 8) redirect(`/config?aba=usuarios&erro=${encodeURIComponent("Defina uma senha inicial com 8+ caracteres.")}`);
     await db.user.create({ data: { ...data, password: await bcrypt.hash(pw, 10) } });
   }
+  revalidatePath("/config");
+  redirect("/config?aba=usuarios");
+}
+
+/**
+ * Exclui um usuário. Sem histórico, apaga de vez. Com histórico (horas, comentários,
+ * alterações etc.), remove o acesso e tira das equipes e tarefas abertas, mas guarda o
+ * nome para os relatórios e a rentabilidade continuarem certos.
+ */
+export async function deleteUser(form: FormData) {
+  const admin = await requireAdmin();
+  const id = Number(form.get("id"));
+  const back = (m: string) => redirect(`/config?aba=usuarios&erro=${encodeURIComponent(m)}`);
+  if (!id) back("Usuário não encontrado.");
+  if (id === admin.id) back("Você não pode excluir o próprio usuário.");
+  const u = await db.user.findUnique({
+    where: { id },
+    include: { _count: { select: { jobsRequested: true, tasks: true, comments: true, timeEntries: true, revisions: true, activities: true, jobImages: true } } },
+  });
+  if (!u || u.deletedAt) back("Usuário não encontrado.");
+  if (u!.role === "ADMIN") {
+    const admins = await db.user.count({ where: { role: "ADMIN", active: true, deletedAt: null, NOT: { id } } });
+    if (admins === 0) back("Não dá para excluir o último administrador.");
+  }
+  const c = u!._count;
+  const hasHistory = c.jobsRequested + c.comments + c.timeEntries + c.revisions + c.activities + c.jobImages > 0;
+  await db.$transaction(async (tx) => {
+    await tx.jobResponsible.deleteMany({ where: { userId: id } });
+    await tx.task.updateMany({ where: { assigneeId: id, done: false }, data: { assigneeId: null } });
+    if (!hasHistory) {
+      await tx.task.updateMany({ where: { assigneeId: id }, data: { assigneeId: null } });
+      await tx.user.delete({ where: { id } });
+    } else {
+      await tx.user.update({
+        where: { id },
+        data: { active: false, deletedAt: new Date(), email: `excluido-${id}-${Date.now()}@faz.invalid`, password: "!" },
+      });
+    }
+  });
   revalidatePath("/config");
   redirect("/config?aba=usuarios");
 }

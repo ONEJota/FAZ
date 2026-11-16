@@ -2,7 +2,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
-import { isManager, requireUser } from "@/lib/auth";
+import { canAccessJob, isManager, requireUser } from "@/lib/auth";
 
 function refresh() {
   revalidatePath("/", "layout");
@@ -13,6 +13,7 @@ export async function startTimer(form: FormData) {
   const user = await requireUser();
   const jobId = Number(form.get("jobId")) || null;
   let clientId = Number(form.get("clientId")) || 0;
+  if (jobId && !(await canAccessJob(user, jobId))) return;
   if (jobId) clientId = (await db.job.findUniqueOrThrow({ where: { id: jobId } })).clientId;
   if (!clientId) return;
   await stopRunning(user.id);
@@ -55,6 +56,7 @@ export async function addTimeEntry(form: FormData) {
   const end = new Date(String(form.get("endedAt")));
   const back = String(form.get("back") || "/horas");
   const bad = (m: string) => redirect(`${back}${back.includes("?") ? "&" : "?"}erro=${encodeURIComponent(m)}`);
+  if (jobId && !(await canAccessJob(user, jobId))) bad("Você não tem acesso a esse job.");
   if (!clientId) bad("Escolha o job ou o cliente.");
   if (isNaN(+start) || isNaN(+end) || end <= start) bad("Início e fim inválidos.");
   const minutes = Math.round((end.getTime() - start.getTime()) / 60000);

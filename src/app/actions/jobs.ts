@@ -2,7 +2,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
-import { isManager, requireManager, requireUser } from "@/lib/auth";
+import { canSeeTask, isManager, requireJobAccess, requireManager, requireUser } from "@/lib/auth";
 import { REVISION_REASONS } from "@/lib/format";
 
 const s = (f: FormData, k: string) => String(f.get(k) ?? "").trim();
@@ -17,8 +17,8 @@ function fail(path: string, msg: string): never {
 }
 
 export async function saveJob(form: FormData) {
-  const user = await requireUser();
   const id = Number(form.get("id") || 0);
+  const user = id ? await requireJobAccess(id) : await requireUser();
   const back = id ? `/jobs/${id}/editar` : "/jobs/novo";
   const title = s(form, "title");
   const clientId = Number(form.get("clientId"));
@@ -87,7 +87,7 @@ export async function saveJob(form: FormData) {
 
 /** Usado pelo Kanban (arrastar) e pelo seletor de situação */
 export async function setJobStatus(jobId: number, statusId: number) {
-  const user = await requireUser();
+  const user = await requireJobAccess(jobId);
   const status = await db.status.findUniqueOrThrow({ where: { id: statusId } });
   await db.job.update({ where: { id: jobId }, data: { statusId, completedAt: status.isDone ? new Date() : null } });
   await log(jobId, user.id, `mudou a situação para “${status.name}”`);
@@ -100,8 +100,8 @@ export async function setJobStatusForm(form: FormData) {
 }
 
 export async function addRevision(form: FormData) {
-  const user = await requireUser();
   const jobId = Number(form.get("jobId"));
+  const user = await requireJobAccess(jobId);
   const reason = s(form, "reason");
   const details = s(form, "details");
   if (!REVISION_REASONS[reason]) fail(`/jobs/${jobId}?aba=alteracoes`, "Escolha o motivo da alteração.");
@@ -118,8 +118,8 @@ export async function addRevision(form: FormData) {
 }
 
 export async function addTask(form: FormData) {
-  const user = await requireUser();
   const jobId = Number(form.get("jobId"));
+  const user = await requireJobAccess(jobId);
   const title = s(form, "title");
   if (!title) return;
   await db.task.create({
@@ -130,9 +130,10 @@ export async function addTask(form: FormData) {
 }
 
 export async function toggleTask(form: FormData) {
-  const user = await requireUser();
   const id = Number(form.get("taskId"));
-  const t = await db.task.findUniqueOrThrow({ where: { id } });
+  const t = await db.task.findUniqueOrThrow({ where: { id }, include: { job: { include: { responsibles: true } } } });
+  const user = await requireJobAccess(t.jobId);
+  if (!canSeeTask(user, t, t.job.responsibles.map((r) => r.userId))) return;
   await db.task.update({ where: { id }, data: { done: !t.done, doneAt: t.done ? null : new Date() } });
   await log(t.jobId, user.id, `${t.done ? "reabriu" : "concluiu"} a tarefa “${t.title}”`);
   revalidatePath(`/jobs/${t.jobId}`);
@@ -140,8 +141,8 @@ export async function toggleTask(form: FormData) {
 }
 
 export async function addComment(form: FormData) {
-  const user = await requireUser();
   const jobId = Number(form.get("jobId"));
+  const user = await requireJobAccess(jobId);
   const body = s(form, "body");
   if (!body) return;
   await db.comment.create({ data: { jobId, body, userId: user.id } });
@@ -169,7 +170,7 @@ export async function restoreJob(form: FormData) {
 }
 
 export async function duplicateJob(form: FormData) {
-  const user = await requireUser();
+  const user = await requireJobAccess(Number(form.get("jobId")));
   const src = await db.job.findUniqueOrThrow({ where: { id: Number(form.get("jobId")) }, include: { responsibles: true } });
   const first = await db.status.findFirst({ orderBy: { order: "asc" } });
   const last = await db.job.aggregate({ _max: { number: true } });
@@ -192,6 +193,41 @@ export async function duplicateJob(form: FormData) {
   });
   await log(job.id, user.id, `duplicou a partir do job ${src.number}`);
   redirect(`/jobs/${job.id}/editar`);
+}
+
+// ---------- Imagens do job (PIT) ----------
+const MAX_IMAGE_BYTES = 4 * 1024 * 1024; // limite das funções da Netlify (~6 MB por envio)
+const IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+
+export async function uploadJobImages(form: FormData) {
+  const jobId = Number(form.get("jobId"));
+  const user = await requireJobAccess(jobId);
+  const back = `/jobs/${jobId}?aba=imagens`;
+  const files = form.getAll("images").filter((f): f is File => f instanceof File && f.size > 0);
+  if (files.length === 0) fail(back, "Escolha pelo menos uma imagem.");
+  for (const f of files) {
+    if (!IMAGE_TYPES.includes(f.type)) fail(back, `“${f.name}” não é uma imagem JPG, PNG, WEBP ou GIF.`);
+  }
+  if (files.reduce((a, f) => a + f.size, 0) > MAX_IMAGE_BYTES) fail(back, "As imagens passam de 4 MB. Envie menos de cada vez ou reduza o tamanho.");
+  for (const f of files) {
+    await db.jobImage.create({
+      data: { jobId, name: f.name.slice(0, 200), mimeType: f.type, size: f.size, data: Buffer.from(await f.arrayBuffer()), uploadedById: user.id },
+    });
+  }
+  await log(jobId, user.id, files.length === 1 ? `anexou a imagem “${files[0].name}”` : `anexou ${files.length} imagens`);
+  revalidatePath(`/jobs/${jobId}`);
+  redirect(back);
+}
+
+export async function deleteJobImage(form: FormData) {
+  const id = Number(form.get("imageId"));
+  const img = await db.jobImage.findUniqueOrThrow({ where: { id }, select: { jobId: true, name: true, uploadedById: true } });
+  const user = await requireJobAccess(img.jobId);
+  if (img.uploadedById !== user.id && !isManager(user)) fail(`/jobs/${img.jobId}?aba=imagens`, "Só quem enviou a imagem ou a coordenação pode excluí-la.");
+  await db.jobImage.delete({ where: { id } });
+  await log(img.jobId, user.id, `excluiu a imagem “${img.name}”`);
+  revalidatePath(`/jobs/${img.jobId}`);
+  redirect(`/jobs/${img.jobId}?aba=imagens`);
 }
 
 export async function canManage() {
