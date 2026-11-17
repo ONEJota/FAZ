@@ -16,15 +16,16 @@ type Props = {
   statuses: Opt[];
   users: Opt[];
   defaultDue: string;
-  currentUserId: number;
+  currentUserId?: number; // não é mais usado: quem abre o job não entra como responsável automaticamente
 };
 
-export function JobForm({ job, clients, campaigns, fees, services, statuses, users, defaultDue, currentUserId }: Props) {
+export function JobForm({ job, clients, campaigns, fees, services, statuses, users, defaultDue }: Props) {
   const [clientId, setClientId] = useState(job?.clientId ?? 0);
   const [serviceId, setServiceId] = useState(job?.serviceId ?? 0);
   const [est, setEst] = useState(job?.estimatedHours ?? "");
   const [rating, setRating] = useState(job?.rating ?? 0);
-  const [resp, setResp] = useState<number[]>(job?.responsibles ?? [currentUserId]);
+  // Quem abre o job fica registrado em "Pedido por"; a equipe é escolhida aqui (começa vazia)
+  const [resp, setResp] = useState<number[]>(job?.responsibles ?? []);
   const clientCampaigns = campaigns.filter((c) => c.clientId === clientId);
   const clientFees = fees.filter((f) => f.clientId === clientId);
   const svc = services.find((s) => s.id === serviceId);

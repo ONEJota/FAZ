@@ -132,6 +132,40 @@ export async function setJobStatus(jobId: number, statusId: number) {
   revalidatePath(`/jobs/${jobId}`);
 }
 
+/**
+ * Concluir o job inteiro (botão no topo do job): fecha as tarefas que ainda estiverem
+ * abertas, leva o job para a situação final e avisa todo mundo da entrega.
+ */
+export async function concludeJob(form: FormData) {
+  const jobId = Number(form.get("jobId"));
+  const user = await requireJobAccess(jobId);
+  const job = await db.job.findUniqueOrThrow({ where: { id: jobId }, include: { status: true } });
+  const final = await db.status.findFirst({ where: { isDone: true }, orderBy: { order: "desc" } });
+  if (!final) fail(`/jobs/${jobId}`, "Cadastre uma situação final em Configurações › Situações.");
+  if (job.status.isDone) redirect(`/jobs/${jobId}`);
+  // Avisa antes de fechar as tarefas, para os donos delas ainda contarem como envolvidos
+  const followersBefore = await jobFollowers(jobId);
+  const closed = await db.task.updateMany({ where: { jobId, status: { in: OPEN_TASK } }, data: { status: "CONCLUIDA", done: true, doneAt: new Date() } });
+  await db.job.update({ where: { id: jobId }, data: { statusId: final!.id, completedAt: new Date() } });
+  await log(jobId, user.id, `concluiu o job${closed.count ? ` (e fechou ${closed.count} ${closed.count === 1 ? "tarefa aberta" : "tarefas abertas"})` : ""}`);
+  await notify([...followersBefore, job.requesterId], user.id, { type: "ENTREGA", title: `Job #${job.number} entregue! 🎉`, body: job.title, jobId, link: `/jobs/${jobId}` });
+  revalidatePath("/", "layout");
+  redirect(`/jobs/${jobId}`);
+}
+
+/** Reabrir um job concluído: volta para a primeira situação do fluxo. */
+export async function reopenJob(form: FormData) {
+  const jobId = Number(form.get("jobId"));
+  const user = await requireJobAccess(jobId);
+  const first = await db.status.findFirst({ where: { isDone: false }, orderBy: { order: "asc" } });
+  if (!first) redirect(`/jobs/${jobId}`);
+  await db.job.update({ where: { id: jobId }, data: { statusId: first!.id, completedAt: null } });
+  await log(jobId, user.id, `reabriu o job (situação “${first!.name}”)`);
+  await notifyStatus(jobId, first!, user);
+  revalidatePath("/", "layout");
+  redirect(`/jobs/${jobId}`);
+}
+
 export async function setJobStatusForm(form: FormData) {
   await setJobStatus(Number(form.get("jobId")), Number(form.get("statusId")));
 }

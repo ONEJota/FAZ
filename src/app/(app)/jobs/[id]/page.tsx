@@ -5,7 +5,8 @@ import { canSeeTask, isManager, requireJobAccess } from "@/lib/auth";
 import { fmtDateTime, fmtMinutes, fmtShort, isLate, REVISION_REASONS, toInputDateTime } from "@/lib/format";
 import { ErrorBanner, Stars, StatusChip, Tabs, Empty } from "@/components/ui";
 import { Avatar } from "@/components/Avatar";
-import { addComment, addRevision, addTask, deleteJobImage, duplicateJob, restoreJob, setJobStatusForm, trashJob, uploadJobImages } from "@/app/actions/jobs";
+import { addComment, addRevision, addTask, deleteJobImage, duplicateJob, reopenJob, restoreJob, setJobStatusForm, trashJob, uploadJobImages } from "@/app/actions/jobs";
+import { ConcludeJobButton } from "@/components/ConcludeJobButton";
 import { TaskControls } from "@/components/TaskControls";
 import { OPEN_TASK } from "@/lib/tasks";
 import { addTimeEntry, deleteTimeEntry, startTimer } from "@/app/actions/horas";
@@ -31,6 +32,8 @@ export default async function JobPage({ params, searchParams }: { params: Promis
   if (!job) notFound();
   // Colaborador vê só as tarefas abertas para ele
   const responsibleIds = job.responsibles.map((r) => r.userId);
+  // Todas as tarefas abertas (antes do filtro): concluir o job fecha todas, então o aviso mostra todas
+  const allOpenTasks = job.tasks.filter((t) => OPEN_TASK.includes(t.status as never)).map((t) => ({ title: t.title, who: t.assignee?.name ?? "sem responsável" }));
   job.tasks = job.tasks.filter((t) => canSeeTask(user, t, responsibleIds));
   const [statuses, users] = await Promise.all([
     db.status.findMany({ orderBy: { order: "asc" } }),
@@ -85,6 +88,15 @@ export default async function JobPage({ params, searchParams }: { params: Promis
             <button className="btn-ghost">Mudar</button>
           </form>
           <form action={startTimer}><input type="hidden" name="jobId" value={job.id} /><input type="hidden" name="description" value={job.service.name} /><button className="btn-ghost">⏱ Iniciar horas</button></form>
+          {!job.deletedAt && (job.status.isDone ? (
+            <form action={reopenJob}><input type="hidden" name="jobId" value={job.id} /><button className="btn-ghost">↺ Reabrir job</button></form>
+          ) : (
+            <ConcludeJobButton
+              jobId={job.id}
+              number={job.number}
+              openTasks={allOpenTasks}
+            />
+          ))}
           <Link href={`${base}/editar`} className="btn-primary">Editar</Link>
         </div>
       </div>
