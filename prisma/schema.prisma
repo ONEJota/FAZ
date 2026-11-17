@@ -40,6 +40,7 @@ model User {
   revisions       Revision[]
   activities      Activity[]
   jobImages       JobImage[]
+  notifications   Notification[]
 }
 
 // ---------- Cadastros ----------
@@ -158,6 +159,7 @@ model Job {
   timeEntries  TimeEntry[]
   activities   Activity[]
   images       JobImage[]
+  notifications Notification[]
 }
 
 // Imagens anexadas ao job (PIT): referências, artes, prints de aprovação
@@ -249,4 +251,23 @@ model Activity {
   user      User     @relation(fields: [userId], references: [id])
   action    String
   createdAt DateTime @default(now())
+}
+
+// ---------- Notificações (sininho) ----------
+
+model Notification {
+  id        Int       @id @default(autoincrement())
+  userId    Int
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  jobId     Int?
+  job       Job?      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  type      String    // JOB | TAREFA | COMENTARIO | SITUACAO | ENTREGA | ALTERACAO | PRAZO
+  title     String
+  body      String    @default("")
+  link      String    @default("/")
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId, readAt])
+  @@index([userId, createdAt])
 }

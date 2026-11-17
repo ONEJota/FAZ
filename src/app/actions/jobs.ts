@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { canSeeTask, isManager, requireJobAccess, requireManager, requireUser } from "@/lib/auth";
 import { REVISION_REASONS } from "@/lib/format";
+import { jobFollowers, notify } from "@/lib/notify";
 
 const s = (f: FormData, k: string) => String(f.get(k) ?? "").trim();
 const dt = (v: string) => (v ? new Date(v) : null);
@@ -56,8 +57,12 @@ export async function saveJob(form: FormData) {
   };
 
   let jobId = id;
+  let previousResponsibles: number[] = [];
+  let previousStatusId = 0;
   if (id) {
-    const before = await db.job.findUniqueOrThrow({ where: { id } });
+    const before = await db.job.findUniqueOrThrow({ where: { id }, include: { responsibles: true } });
+    previousResponsibles = before.responsibles.map((r) => r.userId);
+    previousStatusId = before.statusId;
     await db.job.update({
       where: { id },
       data: {
@@ -81,6 +86,16 @@ export async function saveJob(form: FormData) {
     jobId = job.id;
     await log(jobId, user.id, "abriu o job");
   }
+  const saved = await db.job.findUniqueOrThrow({ where: { id: jobId }, select: { number: true, title: true } });
+  const added = responsibles.filter((r) => !previousResponsibles.includes(r));
+  await notify(added, user.id, {
+    type: "JOB",
+    title: `${user.name.split(" ")[0]} te colocou no job #${saved.number}`,
+    body: saved.title,
+    jobId,
+    link: `/jobs/${jobId}`,
+  });
+  if (id && previousStatusId !== statusId && status) await notifyStatus(jobId, status, user);
   revalidatePath("/pauta");
   redirect(`/jobs/${jobId}`);
 }
@@ -89,8 +104,10 @@ export async function saveJob(form: FormData) {
 export async function setJobStatus(jobId: number, statusId: number) {
   const user = await requireJobAccess(jobId);
   const status = await db.status.findUniqueOrThrow({ where: { id: statusId } });
+  const before = await db.job.findUniqueOrThrow({ where: { id: jobId }, select: { statusId: true } });
   await db.job.update({ where: { id: jobId }, data: { statusId, completedAt: status.isDone ? new Date() : null } });
   await log(jobId, user.id, `mudou a situação para “${status.name}”`);
+  if (before.statusId !== statusId) await notifyStatus(jobId, status, user);
   revalidatePath("/pauta");
   revalidatePath(`/jobs/${jobId}`);
 }
@@ -113,6 +130,14 @@ export async function addRevision(form: FormData) {
   const ajustes = await db.status.findFirst({ where: { name: "Ajustes" } });
   if (ajustes) await db.job.update({ where: { id: jobId }, data: { statusId: ajustes.id, completedAt: null } });
   await log(jobId, user.id, `registrou a alteração ${letter} (${REVISION_REASONS[reason]})`);
+  const rj = await db.job.findUniqueOrThrow({ where: { id: jobId }, select: { number: true } });
+  await notify(await jobFollowers(jobId), user.id, {
+    type: "ALTERACAO",
+    title: `Alteração ${letter} no job #${rj.number}`,
+    body: `${REVISION_REASONS[reason]}: ${details}`,
+    jobId,
+    link: `/jobs/${jobId}?aba=alteracoes`,
+  });
   revalidatePath(`/jobs/${jobId}`);
   redirect(`/jobs/${jobId}?aba=alteracoes`);
 }
@@ -122,10 +147,19 @@ export async function addTask(form: FormData) {
   const user = await requireJobAccess(jobId);
   const title = s(form, "title");
   if (!title) return;
+  const assigneeId = Number(form.get("assigneeId")) || null;
   await db.task.create({
-    data: { jobId, title, assigneeId: Number(form.get("assigneeId")) || null, dueDate: dt(s(form, "dueDate")) },
+    data: { jobId, title, assigneeId, dueDate: dt(s(form, "dueDate")) },
   });
   await log(jobId, user.id, `criou a tarefa “${title}”`);
+  const tj = await db.job.findUniqueOrThrow({ where: { id: jobId }, select: { number: true } });
+  await notify([assigneeId], user.id, {
+    type: "TAREFA",
+    title: `Nova tarefa para você no job #${tj.number}`,
+    body: title,
+    jobId,
+    link: `/jobs/${jobId}?aba=tarefas`,
+  });
   revalidatePath(`/jobs/${jobId}`);
 }
 
@@ -146,6 +180,14 @@ export async function addComment(form: FormData) {
   const body = s(form, "body");
   if (!body) return;
   await db.comment.create({ data: { jobId, body, userId: user.id } });
+  const cj = await db.job.findUniqueOrThrow({ where: { id: jobId }, select: { number: true } });
+  await notify(await jobFollowers(jobId), user.id, {
+    type: "COMENTARIO",
+    title: `${user.name.split(" ")[0]} comentou no job #${cj.number}`,
+    body,
+    jobId,
+    link: `/jobs/${jobId}?aba=comentarios`,
+  });
   revalidatePath(`/jobs/${jobId}`);
   revalidatePath("/");
 }
@@ -193,6 +235,15 @@ export async function duplicateJob(form: FormData) {
   });
   await log(job.id, user.id, `duplicou a partir do job ${src.number}`);
   redirect(`/jobs/${job.id}/editar`);
+}
+
+/** Avisa quem acompanha o job que a situação mudou; na situação final, é uma entrega. */
+async function notifyStatus(jobId: number, status: { name: string; isDone: boolean }, actor: { id: number; name: string }) {
+  const j = await db.job.findUniqueOrThrow({ where: { id: jobId }, select: { number: true, title: true, requesterId: true } });
+  const people = [...(await jobFollowers(jobId)), ...(status.isDone ? [j.requesterId] : [])];
+  await notify(people, actor.id, status.isDone
+    ? { type: "ENTREGA", title: `Job #${j.number} entregue! 🎉`, body: j.title, jobId, link: `/jobs/${jobId}` }
+    : { type: "SITUACAO", title: `Job #${j.number} foi para “${status.name}”`, body: `${actor.name.split(" ")[0]} · ${j.title}`, jobId, link: `/jobs/${jobId}` });
 }
 
 // ---------- Imagens do job (PIT) ----------

@@ -78,3 +78,11 @@ body {
   .intro-brand { display: none; }
   .intro-leave { animation: intro-stage-out .3s forwards !important; }
 }
+
+/* Sininho balançando quando chega notificação */
+.bell-ring { animation: bell-ring 1s cubic-bezier(.36,.07,.19,.97); transform-origin: 50% 10%; }
+@keyframes bell-ring {
+  10%, 90% { transform: rotate(-4deg); } 20%, 80% { transform: rotate(10deg); }
+  30%, 50%, 70% { transform: rotate(-16deg); } 40%, 60% { transform: rotate(16deg); }
+}
+@media (prefers-reduced-motion: reduce) { .bell-ring { animation: none; } }

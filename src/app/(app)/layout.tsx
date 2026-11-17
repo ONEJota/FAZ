@@ -3,6 +3,8 @@ import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { OpeningIntro, INTRO_COOKIE } from "@/components/OpeningIntro";
 import { isLate } from "@/lib/format";
+import { NotificationBell } from "@/components/NotificationBell";
+import { notificationFeed } from "@/lib/notifications";
 import { requireUser, isManager, ROLES } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { logout } from "../actions/auth";
@@ -27,6 +29,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   });
 
   // Abertura depois do login: saudação pela hora e um resumo da pauta da pessoa
+  const feed = await notificationFeed(user.id);
   const introNow = !!(await cookies()).get(INTRO_COOKIE);
   const h = new Date().getHours();
   const greeting = h < 12 ? "Bom dia" : h < 18 ? "Boa tarde" : "Boa noite";
@@ -74,6 +77,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               running={running ? { startedAt: running.startedAt.toISOString(), label: running.job ? `${running.job.number} · ${running.job.title}` : running.client.name } : null}
               jobs={myJobs.map((j) => ({ id: j.id, label: `${j.number} · ${j.title} — ${j.client.name}` }))}
             />
+            <NotificationBell initial={feed} />
             <details className="relative">
               <summary className="flex cursor-pointer list-none items-center gap-2">
                 <Avatar user={user} size={34} emoji={false} />
