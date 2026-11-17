@@ -31,11 +31,12 @@ export type AvatarUser = {
 
 export const isAvatarStyle = (s: unknown): s is AvatarStyle => AVATAR_STYLES.some((x) => x.key === s);
 
-/** Endereço da imagem do avatar (gerada em /avatar.svg, sem dados pessoais na URL). */
+/**
+ * Endereço da imagem do avatar. Tudo vai no caminho (e não em ?parâmetros) porque o cache
+ * da Netlify ignora a query string: com ?s=…&seed=… todos recebiam o mesmo avatar.
+ */
 export function avatarUrl(style: string, seed: string, bg?: string | null) {
-  const p = new URLSearchParams({ s: style, seed });
-  if (bg) p.set("bg", bg);
-  return `/avatar.svg?${p.toString()}`;
+  return `/avatar/${style}/${bg || "x"}/${encodeURIComponent(seed)}.svg`;
 }
 
 export function randomSeed() {
