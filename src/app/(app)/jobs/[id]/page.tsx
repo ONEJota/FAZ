@@ -5,7 +5,9 @@ import { canSeeTask, isManager, requireJobAccess } from "@/lib/auth";
 import { fmtDateTime, fmtMinutes, fmtShort, isLate, REVISION_REASONS, toInputDateTime } from "@/lib/format";
 import { ErrorBanner, Stars, StatusChip, Tabs, Empty } from "@/components/ui";
 import { Avatar } from "@/components/Avatar";
-import { addComment, addRevision, addTask, deleteJobImage, duplicateJob, restoreJob, setJobStatusForm, toggleTask, trashJob, uploadJobImages } from "@/app/actions/jobs";
+import { addComment, addRevision, addTask, deleteJobImage, duplicateJob, restoreJob, setJobStatusForm, trashJob, uploadJobImages } from "@/app/actions/jobs";
+import { TaskControls } from "@/components/TaskControls";
+import { OPEN_TASK } from "@/lib/tasks";
 import { addTimeEntry, deleteTimeEntry, startTimer } from "@/app/actions/horas";
 
 export default async function JobPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ aba?: string; erro?: string }> }) {
@@ -18,7 +20,7 @@ export default async function JobPage({ params, searchParams }: { params: Promis
     include: {
       client: true, campaign: true, fee: true, service: true, status: true, requester: true,
       responsibles: { include: { user: true } },
-      tasks: { include: { assignee: true }, orderBy: [{ done: "asc" }, { dueDate: "asc" }] },
+      tasks: { include: { assignee: true }, orderBy: [{ done: "asc" }, { createdAt: "asc" }] },
       revisions: { include: { createdBy: true }, orderBy: { createdAt: "asc" } },
       comments: { include: { user: true }, orderBy: { createdAt: "asc" } },
       timeEntries: { include: { user: true }, orderBy: { startedAt: "desc" } },
@@ -92,7 +94,7 @@ export default async function JobPage({ params, searchParams }: { params: Promis
         current={aba}
         items={[
           { key: "resumo", label: "Resumo" },
-          { key: "tarefas", label: "Tarefas", count: job.tasks.filter((t) => !t.done).length },
+          { key: "tarefas", label: "Tarefas", count: job.tasks.filter((t) => OPEN_TASK.includes(t.status as never)).length },
           { key: "imagens", label: "Imagens", count: job.images.length },
           { key: "alteracoes", label: "Alterações", count: job.revisions.length },
           { key: "comentarios", label: "Comentários", count: job.comments.length },
@@ -178,16 +180,22 @@ export default async function JobPage({ params, searchParams }: { params: Promis
           {job.tasks.length === 0 ? <Empty>Nenhuma tarefa. Divida o job em etapas para acompanhar melhor.</Empty> : (
             <ul>
               {job.tasks.map((t) => (
-                <li key={t.id} className="flex items-center gap-3 border-t border-black/5 px-4 py-2.5 first:border-0">
-                  <form action={toggleTask}>
-                    <input type="hidden" name="taskId" value={t.id} />
-                    <button className={`flex h-5 w-5 items-center justify-center rounded border text-xs ${t.done ? "border-green-600 bg-green-600 text-white" : "border-black/30 hover:border-mona"}`} title={t.done ? "Reabrir" : "Concluir"}>
-                      {t.done ? "✓" : ""}
-                    </button>
-                  </form>
-                  <span className={`flex-1 text-sm ${t.done ? "text-black/40 line-through" : ""}`}>{t.title}</span>
-                  {t.assignee && <span className="text-xs text-black/55">{t.assignee.name}</span>}
-                  {t.dueDate && <span className={`text-xs ${!t.done && t.dueDate < new Date() ? "font-semibold text-red-600" : "text-black/45"}`}>{fmtShort(t.dueDate)}</span>}
+                <li key={t.id} className="flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-black/5 px-4 py-3 first:border-0">
+                  {t.assignee ? <Avatar user={t.assignee} size={28} /> : <span className="h-7 w-7 rounded-full border border-dashed border-black/20" title="Sem responsável" />}
+                  <span className="min-w-0 flex-1">
+                    <span className={`block text-sm font-semibold ${t.done ? "text-black/40 line-through" : ""}`}>{t.title}</span>
+                    <span className="block text-xs text-black/45">
+                      {t.assignee?.name ?? "Sem responsável"}
+                      {t.dueDate && <> · <span className={!t.done && t.dueDate < new Date() ? "font-semibold text-red-600" : ""}>{fmtShort(t.dueDate)}</span></>}
+                    </span>
+                  </span>
+                  <TaskControls
+                    task={{ id: t.id, title: t.title, status: t.status }}
+                    sectors={statuses.filter((s) => !s.isDone).map((s) => ({ id: s.id, name: s.name }))}
+                    users={users.map((u) => ({ id: u.id, name: u.name }))}
+                    back={`${base}?aba=tarefas`}
+                    canEdit={manager || t.assigneeId === user.id || (t.assigneeId === null && responsibleIds.includes(user.id))}
+                  />
                 </li>
               ))}
             </ul>

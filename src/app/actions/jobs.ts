@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { canSeeTask, isManager, requireJobAccess, requireManager, requireUser } from "@/lib/auth";
 import { REVISION_REASONS } from "@/lib/format";
 import { jobFollowers, notify } from "@/lib/notify";
+import { OPEN_TASK, type TaskStatus } from "@/lib/tasks";
 
 const s = (f: FormData, k: string) => String(f.get(k) ?? "").trim();
 const dt = (v: string) => (v ? new Date(v) : null);
@@ -87,13 +88,32 @@ export async function saveJob(form: FormData) {
     await log(jobId, user.id, "abriu o job");
   }
   const saved = await db.job.findUniqueOrThrow({ where: { id: jobId }, select: { number: true, title: true } });
+  // Tarefa de cada pessoa colocada no job (campo "task_<id>" do formulário); nasce como Pendente
+  const personTasks = responsibles
+    .map((uid) => ({ uid, title: s(form, `task_${uid}`).slice(0, 200) }))
+    .filter((t) => t.title);
+  for (const t of personTasks) {
+    await db.task.create({ data: { jobId, title: t.title, assigneeId: t.uid, dueDate: due, status: "PENDENTE" } });
+  }
+  if (personTasks.length) await log(jobId, user.id, `criou ${personTasks.length === 1 ? "a tarefa" : `${personTasks.length} tarefas`} da equipe`);
+  const taskOf = new Map(personTasks.map((t) => [t.uid, t.title]));
   const added = responsibles.filter((r) => !previousResponsibles.includes(r));
-  await notify(added, user.id, {
-    type: "JOB",
-    title: `${user.name.split(" ")[0]} te colocou no job #${saved.number}`,
+  for (const uid of added) {
+    await notify([uid], user.id, {
+      type: "JOB",
+      title: `${user.name.split(" ")[0]} te colocou no job #${saved.number}`,
+      body: taskOf.has(uid) ? `Sua tarefa: ${taskOf.get(uid)}` : saved.title,
+      jobId,
+      link: `/jobs/${jobId}${taskOf.has(uid) ? "?aba=tarefas" : ""}`,
+    });
+  }
+  // Quem já estava no job e ganhou tarefa nova na edição
+  await notify(personTasks.filter((t) => !added.includes(t.uid)).map((t) => t.uid), user.id, {
+    type: "TAREFA",
+    title: `Nova tarefa para você no job #${saved.number}`,
     body: saved.title,
     jobId,
-    link: `/jobs/${jobId}`,
+    link: `/jobs/${jobId}?aba=tarefas`,
   });
   if (id && previousStatusId !== statusId && status) await notifyStatus(jobId, status, user);
   revalidatePath("/pauta");
@@ -163,15 +183,99 @@ export async function addTask(form: FormData) {
   revalidatePath(`/jobs/${jobId}`);
 }
 
-export async function toggleTask(form: FormData) {
-  const id = Number(form.get("taskId"));
-  const t = await db.task.findUniqueOrThrow({ where: { id }, include: { job: { include: { responsibles: true } } } });
+// ---------- Andamento das tarefas ----------
+
+/** Carrega a tarefa e confere se a pessoa pode mexer nela (dona da tarefa, responsável ou coordenação). */
+async function taskForUser(taskId: number) {
+  const t = await db.task.findUniqueOrThrow({ where: { id: taskId }, include: { job: { include: { responsibles: true } } } });
   const user = await requireJobAccess(t.jobId);
-  if (!canSeeTask(user, t, t.job.responsibles.map((r) => r.userId))) return;
-  await db.task.update({ where: { id }, data: { done: !t.done, doneAt: t.done ? null : new Date() } });
-  await log(t.jobId, user.id, `${t.done ? "reabriu" : "concluiu"} a tarefa “${t.title}”`);
-  revalidatePath(`/jobs/${t.jobId}`);
+  if (!canSeeTask(user, t, t.job.responsibles.map((r) => r.userId))) redirect("/?erro=permissao");
+  return { t, user };
+}
+
+function refreshTask(jobId: number) {
+  revalidatePath(`/jobs/${jobId}`);
   revalidatePath("/pauta");
+  revalidatePath("/");
+}
+
+/** Pendente <-> Em andamento (e reabrir uma tarefa concluída ou repassada). */
+export async function setTaskStatus(form: FormData) {
+  const status = String(form.get("status")) as TaskStatus;
+  if (!OPEN_TASK.includes(status)) return;
+  const { t, user } = await taskForUser(Number(form.get("taskId")));
+  if (t.status === status) return;
+  const reopening = !OPEN_TASK.includes(t.status as TaskStatus);
+  await db.task.update({ where: { id: t.id }, data: { status, done: false, doneAt: null } });
+  await log(t.jobId, user.id, reopening ? `reabriu a tarefa “${t.title}”` : `marcou “${t.title}” como ${status === "ANDAMENTO" ? "em andamento" : "pendente"}`);
+  refreshTask(t.jobId);
+}
+
+/**
+ * Concluir: a tarefa fecha. Se não sobrar nenhuma tarefa aberta no job, o job vai para a
+ * situação final (entrega). Se sobrar, o job continua só para quem ainda tem tarefa aberta.
+ */
+export async function completeTask(form: FormData) {
+  const { t, user } = await taskForUser(Number(form.get("taskId")));
+  if (!OPEN_TASK.includes(t.status as TaskStatus)) return;
+  await db.task.update({ where: { id: t.id }, data: { status: "CONCLUIDA", done: true, doneAt: new Date() } });
+  await log(t.jobId, user.id, `concluiu a tarefa “${t.title}”`);
+  const stillOpen = await db.task.count({ where: { jobId: t.jobId, status: { in: OPEN_TASK } } });
+  if (stillOpen === 0) {
+    const final = await db.status.findFirst({ where: { isDone: true }, orderBy: { order: "desc" } });
+    if (final && t.job.statusId !== final.id) {
+      await db.job.update({ where: { id: t.jobId }, data: { statusId: final.id, completedAt: new Date() } });
+      await log(t.jobId, user.id, `concluiu o job (todas as tarefas fechadas) e mudou a situação para “${final.name}”`);
+      await notifyStatus(t.jobId, final, user);
+    }
+  } else {
+    await notify(await jobFollowers(t.jobId), user.id, {
+      type: "TAREFA",
+      title: `${user.name.split(" ")[0]} concluiu “${t.title}” no job #${t.job.number}`,
+      body: `${stillOpen} ${stillOpen === 1 ? "tarefa ainda aberta" : "tarefas ainda abertas"}`,
+      jobId: t.jobId,
+      link: `/jobs/${t.jobId}?aba=tarefas`,
+    });
+  }
+  refreshTask(t.jobId);
+  redirect(String(form.get("back") || `/jobs/${t.jobId}?aba=tarefas`));
+}
+
+/**
+ * Passar para outro setor: a tarefa sai da área de trabalho de quem repassou, o job muda
+ * para a situação (setor) escolhida e, se indicado, alguém recebe a próxima tarefa.
+ */
+export async function handOffTask(form: FormData) {
+  const { t, user } = await taskForUser(Number(form.get("taskId")));
+  const back = String(form.get("back") || `/jobs/${t.jobId}?aba=tarefas`);
+  if (!OPEN_TASK.includes(t.status as TaskStatus)) redirect(back);
+  const statusId = Number(form.get("statusId"));
+  const sector = statusId ? await db.status.findUnique({ where: { id: statusId } }) : null;
+  if (!sector || sector.isDone) fail(back, "Escolha o setor para onde o job vai.");
+  const nextId = Number(form.get("assigneeId")) || null;
+  const nextTitle = s(form, "nextTitle").slice(0, 200) || `${sector!.name}: ${t.job.title}`;
+
+  await db.task.update({ where: { id: t.id }, data: { status: "REPASSADA", done: true, doneAt: new Date() } });
+  await log(t.jobId, user.id, `repassou a tarefa “${t.title}” para ${sector!.name}`);
+  if (nextId) {
+    await db.task.create({ data: { jobId: t.jobId, title: nextTitle, assigneeId: nextId, dueDate: t.job.dueDate, status: "PENDENTE" } });
+    await log(t.jobId, user.id, `criou a tarefa “${nextTitle}”`);
+    await notify([nextId], user.id, {
+      type: "TAREFA",
+      title: `${user.name.split(" ")[0]} passou o job #${t.job.number} para você`,
+      body: nextTitle,
+      jobId: t.jobId,
+      link: `/jobs/${t.jobId}?aba=tarefas`,
+    });
+  }
+  if (t.job.statusId !== sector!.id) {
+    await db.job.update({ where: { id: t.jobId }, data: { statusId: sector!.id, completedAt: null } });
+    await log(t.jobId, user.id, `mudou a situação para “${sector!.name}”`);
+    // Quem recebeu a tarefa já foi avisado acima; não manda um segundo aviso de situação
+    await notifyStatus(t.jobId, sector!, user, [nextId]);
+  }
+  refreshTask(t.jobId);
+  redirect(back);
 }
 
 export async function addComment(form: FormData) {
@@ -238,9 +342,9 @@ export async function duplicateJob(form: FormData) {
 }
 
 /** Avisa quem acompanha o job que a situação mudou; na situação final, é uma entrega. */
-async function notifyStatus(jobId: number, status: { name: string; isDone: boolean }, actor: { id: number; name: string }) {
+async function notifyStatus(jobId: number, status: { name: string; isDone: boolean }, actor: { id: number; name: string }, skip: (number | null)[] = []) {
   const j = await db.job.findUniqueOrThrow({ where: { id: jobId }, select: { number: true, title: true, requesterId: true } });
-  const people = [...(await jobFollowers(jobId)), ...(status.isDone ? [j.requesterId] : [])];
+  const people = [...(await jobFollowers(jobId)), ...(status.isDone ? [j.requesterId] : [])].filter((id) => !skip.includes(id));
   await notify(people, actor.id, status.isDone
     ? { type: "ENTREGA", title: `Job #${j.number} entregue! 🎉`, body: j.title, jobId, link: `/jobs/${jobId}` }
     : { type: "SITUACAO", title: `Job #${j.number} foi para “${status.name}”`, body: `${actor.name.split(" ")[0]} · ${j.title}`, jobId, link: `/jobs/${jobId}` });

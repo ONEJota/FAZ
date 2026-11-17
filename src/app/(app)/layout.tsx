@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { OpeningIntro, INTRO_COOKIE } from "@/components/OpeningIntro";
 import { isLate } from "@/lib/format";
+import { myWorkScope } from "@/lib/tasks";
 import { NotificationBell } from "@/components/NotificationBell";
 import { notificationFeed } from "@/lib/notifications";
 import { requireUser, isManager, ROLES } from "@/lib/auth";
@@ -22,7 +23,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     include: { job: true, client: true },
   });
   const myJobs = await db.job.findMany({
-    where: { deletedAt: null, status: { isDone: false }, responsibles: { some: { userId: user.id } } },
+    where: { deletedAt: null, status: { isDone: false }, ...myWorkScope(user.id) },
     include: { client: true, status: { select: { isDone: true, isWaiting: true } } },
     orderBy: { dueDate: "asc" },
     take: 50,

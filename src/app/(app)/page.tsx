@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { db } from "@/lib/db";
 import { jobScope, requireUser } from "@/lib/auth";
+import { myWorkScope } from "@/lib/tasks";
+import { TaskControls } from "@/components/TaskControls";
 import { fmtMinutes, fmtShort, isLate } from "@/lib/format";
 import { ErrorBanner, PageHeader, Stat, StatusChip, Empty } from "@/components/ui";
 import { Avatar } from "@/components/Avatar";
@@ -13,16 +15,21 @@ export default async function Painel({ searchParams }: { searchParams: Promise<{
   weekStart.setDate(now.getDate() - now.getDay());
   weekStart.setHours(0, 0, 0, 0);
 
+  // Área de trabalho: jobs em que a pessoa tem tarefa aberta (ou é responsável sem tarefa)
   const jobs = await db.job.findMany({
-    where: { deletedAt: null, status: { isDone: false }, responsibles: { some: { userId: user.id } } },
+    where: { deletedAt: null, status: { isDone: false }, ...myWorkScope(user.id) },
     include: { client: true, status: true },
     orderBy: { dueDate: "asc" },
   });
   const tasks = await db.task.findMany({
     where: { assigneeId: user.id, done: false, job: { deletedAt: null } },
-    include: { job: true },
+    include: { job: { select: { number: true, title: true } } },
     orderBy: { dueDate: "asc" },
   });
+  const [sectors, people] = await Promise.all([
+    db.status.findMany({ where: { isDone: false }, orderBy: { order: "asc" }, select: { id: true, name: true } }),
+    db.user.findMany({ where: { active: true }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
+  ]);
   const week = await db.timeEntry.findMany({ where: { userId: user.id, startedAt: { gte: weekStart }, endedAt: { not: null } } });
   const comments = await db.comment.findMany({
     where: { job: { deletedAt: null, responsibles: { some: { userId: user.id } }, ...jobScope(user) } },
@@ -107,12 +114,16 @@ export default async function Painel({ searchParams }: { searchParams: Promise<{
               <Empty>Sem tarefas abertas.</Empty>
             ) : (
               <ul>
-                {tasks.slice(0, 8).map((t) => (
-                  <li key={t.id} className="border-t border-black/5 px-4 py-2 text-sm first:border-0">
-                    <Link href={`/jobs/${t.jobId}?aba=tarefas`} className="hover:text-mona">
-                      {t.title} <span className="text-xs text-black/45">· job {t.job.number}</span>
+                {tasks.slice(0, 10).map((t) => (
+                  <li key={t.id} className="space-y-1.5 border-t border-black/5 px-4 py-3 text-sm first:border-0">
+                    <Link href={`/jobs/${t.jobId}?aba=tarefas`} className="block font-semibold leading-snug hover:text-mona">
+                      {t.title}
+                      <span className="block text-xs font-normal text-black/45">
+                        #{t.job.number} {t.job.title}
+                        {t.dueDate && <> · <span className={t.dueDate < now ? "text-red-600" : ""}>{fmtShort(t.dueDate)}</span></>}
+                      </span>
                     </Link>
-                    {t.dueDate && <p className={`text-xs ${t.dueDate < now ? "text-red-600" : "text-black/45"}`}>{fmtShort(t.dueDate)}</p>}
+                    <TaskControls task={{ id: t.id, title: t.title, status: t.status }} sectors={sectors} users={people} back="/" canEdit />
                   </li>
                 ))}
               </ul>

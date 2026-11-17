@@ -125,6 +125,24 @@ export function JobForm({ job, clients, campaigns, fees, services, statuses, use
             })}
           </div>
         </div>
+        {resp.length > 0 && (
+          <div className="md:col-span-4">
+            <label className="label">{job ? "Nova tarefa para cada pessoa (opcional)" : "Tarefa de cada pessoa"}</label>
+            <div className="space-y-2">
+              {resp.map((uid) => {
+                const u = users.find((x) => x.id === uid);
+                if (!u) return null;
+                return (
+                  <div key={uid} className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-3">
+                    <span className="w-40 shrink-0 truncate text-sm font-semibold">{u.name}</span>
+                    <input name={`task_${uid}`} className="input" placeholder="Ex.: Criar a arte do carrossel" maxLength={200} />
+                  </div>
+                );
+              })}
+            </div>
+            <p className="mt-1 text-xs text-black/45">Cada tarefa começa como Pendente e vai para a área de trabalho da pessoa. Em branco, a pessoa entra no job sem tarefa.</p>
+          </div>
+        )}
         <div>
           <label className="label">Prioridade</label>
           <label className="flex items-center gap-2 py-2 text-sm">

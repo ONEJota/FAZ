@@ -209,6 +209,7 @@ model Task {
   assignee   User?     @relation(fields: [assigneeId], references: [id])
   dueDate    DateTime?
   done       Boolean   @default(false)
+  status     String    @default("PENDENTE") // PENDENTE | ANDAMENTO | CONCLUIDA | REPASSADA (done = concluída ou repassada)
   doneAt     DateTime?
   createdAt  DateTime  @default(now())
 }

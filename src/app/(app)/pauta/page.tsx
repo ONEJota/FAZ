@@ -1,7 +1,8 @@
 import Link from "next/link";
 import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
-import { jobScope, requireUser } from "@/lib/auth";
+import { isManager, jobScope, requireUser } from "@/lib/auth";
+import { myWorkScope } from "@/lib/tasks";
 import { fmtShort, isLate } from "@/lib/format";
 import { PageHeader, StatusChip, Stat, Stars, Empty } from "@/components/ui";
 import { AvatarStack } from "@/components/Avatar";
@@ -17,10 +18,12 @@ export default async function Pauta({ searchParams }: { searchParams: Promise<SP
   const user = await requireUser();
   const view = sp.view === "kanban" ? "kanban" : "lista";
   const grupo = sp.grupo === "situacao" ? "situacao" : sp.grupo === "responsavel" ? "responsavel" : "prazo";
-  const respId = sp.meus ? user.id : Number(sp.resp) || null;
+  const respId = sp.meus ? null : Number(sp.resp) || null;
 
   // Colaborador só enxerga os jobs abertos para ele
   const where: Prisma.JobWhereInput = { deletedAt: null, AND: [jobScope(user)] };
+  // Área de trabalho: some o job que a pessoa já concluiu ou repassou (a não ser que peça os concluídos)
+  if ((sp.meus || !isManager(user)) && !sp.concluidos) (where.AND as Prisma.JobWhereInput[]).push(myWorkScope(user.id));
   const de = isDay(sp.de) ? sp.de : undefined;
   const ate = isDay(sp.ate) ? sp.ate : undefined;
   if (de || ate) where.dueDate = { ...(de ? { gte: new Date(`${de}T00:00:00`) } : {}), ...(ate ? { lte: new Date(`${ate}T23:59:59.999`) } : {}) };
