@@ -14,7 +14,10 @@ export async function login(_: unknown, form: FormData) {
     return { error: "E-mail ou senha inválidos." };
   }
   const token = await signSession({ uid: user.id, role: user.role, name: user.name });
-  (await cookies()).set(SESSION_COOKIE, token, { httpOnly: true, sameSite: "lax", path: "/", maxAge: 60 * 60 * 12, secure: process.env.NODE_ENV === "production" });
+  const jar = await cookies();
+  jar.set(SESSION_COOKIE, token, { httpOnly: true, sameSite: "lax", path: "/", maxAge: 60 * 60 * 12, secure: process.env.NODE_ENV === "production" });
+  // Pede a animação de abertura na primeira tela depois do login (o próprio componente apaga)
+  jar.set("faz_intro", "1", { sameSite: "lax", path: "/", maxAge: 60 * 10, secure: process.env.NODE_ENV === "production" });
   redirect("/");
 }
 

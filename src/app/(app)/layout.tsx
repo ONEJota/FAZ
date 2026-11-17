@@ -1,5 +1,8 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
+import { OpeningIntro, INTRO_COOKIE } from "@/components/OpeningIntro";
+import { isLate } from "@/lib/format";
 import { requireUser, isManager, ROLES } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { logout } from "../actions/auth";
@@ -18,10 +21,29 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   });
   const myJobs = await db.job.findMany({
     where: { deletedAt: null, status: { isDone: false }, responsibles: { some: { userId: user.id } } },
-    include: { client: true },
+    include: { client: true, status: { select: { isDone: true, isWaiting: true } } },
     orderBy: { dueDate: "asc" },
     take: 50,
   });
+
+  // Abertura depois do login: saudação pela hora e um resumo da pauta da pessoa
+  const introNow = !!(await cookies()).get(INTRO_COOKIE);
+  const h = new Date().getHours();
+  const greeting = h < 12 ? "Bom dia" : h < 18 ? "Boa tarde" : "Boa noite";
+  const now = new Date();
+  const endOfDay = new Date(now);
+  endOfDay.setHours(23, 59, 59, 999);
+  const late = myJobs.filter((j) => isLate(j.dueDate, j.status.isDone, j.status.isWaiting)).length;
+  const today = myJobs.filter((j) => j.dueDate >= now && j.dueDate <= endOfDay).length;
+  const plural = (n: number, s: string, p: string) => `${n} ${n === 1 ? s : p}`;
+  const line = late
+    ? `${plural(late, "job atrasado", "jobs atrasados")} te esperando. Vamos nessa.`
+    : today
+      ? `${plural(today, "entrega", "entregas")} hoje. Bora fazer acontecer.`
+      : myJobs.length
+        ? `${plural(myJobs.length, "job", "jobs")} na sua pauta, tudo em dia.`
+        : "Pauta livre por enquanto. Bora criar.";
+  const intro = <OpeningIntro user={user} greeting={greeting} line={line} show={introNow} />;
 
   const links = [
     { href: "/", label: "Painel" },
@@ -35,6 +57,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="min-h-screen">
+      {intro}
       <header className="sticky top-0 z-30 border-b-4 border-mona bg-ink text-white">
         <div className="mx-auto flex max-w-[1400px] flex-wrap items-center gap-x-5 gap-y-2 px-4 py-2.5 lg:h-16 lg:flex-nowrap lg:py-0">
           <Link href="/" className="flex shrink-0 items-center gap-2.5" aria-label="FAZ · Agência Mona">

@@ -36,3 +36,45 @@ body {
   /* Títulos no estilo do site: caixa alta, peso alto e entreletra fechada */
   .display { @apply font-extrabold uppercase leading-[.95] tracking-[-.035em]; }
 }
+
+/* ---------- Abertura depois do login (OpeningIntro) ---------- */
+.intro { position: fixed; inset: 0; z-index: 100; background: var(--color-ink); color: #fff; cursor: pointer; overflow: hidden; }
+.intro-curtain-pink { position: absolute; inset: 0; background: var(--color-mona); transform: translateY(100%); }
+.intro-stage { position: absolute; inset: 0; display: grid; place-items: center; }
+.intro-brand, .intro-person { grid-area: 1 / 1; display: flex; flex-direction: column; align-items: center; text-align: center; padding: 0 16px; }
+
+.intro-logo { opacity: 0; animation: intro-fade-up .5s .05s cubic-bezier(.2,.8,.2,1) forwards; }
+.intro-word { display: flex; align-items: flex-end; font-size: clamp(96px, 22vw, 220px); line-height: .82; margin-top: 18px; }
+.intro-mask { display: inline-block; overflow: hidden; vertical-align: bottom; padding-bottom: .04em; }
+.intro-letter, .intro-rise { display: inline-block; transform: translateY(105%); animation: intro-rise .6s cubic-bezier(.2,.9,.1,1) forwards; }
+.intro-dot { color: var(--color-mona); display: inline-block; transform: scale(0); animation: intro-pop .45s .62s cubic-bezier(.3,1.6,.5,1) forwards; }
+.intro-bar { height: 6px; width: min(340px, 70vw); margin-top: 22px; background: var(--color-mona); transform: scaleX(0); transform-origin: left; animation: intro-bar .7s .55s cubic-bezier(.7,0,.2,1) forwards; }
+.intro-brand { animation: intro-brand-out .45s 1.45s cubic-bezier(.7,0,.3,1) forwards; }
+
+.intro-person { pointer-events: none; }
+.intro-avatar { opacity: 0; transform: scale(.3) rotate(-12deg); animation: intro-avatar .75s 1.7s cubic-bezier(.3,1.5,.5,1) forwards; }
+.intro-hello { font-size: clamp(34px, 6vw, 64px); margin-top: 26px; }
+.intro-line { margin-top: 12px; color: rgb(255 255 255 / .65); font-size: 15px; opacity: 0; animation: intro-fade-up .5s 2.3s ease-out forwards; }
+.intro-skip { position: absolute; bottom: 22px; left: 0; right: 0; text-align: center; font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: rgb(255 255 255 / .3); }
+
+/* Saída: a tela preta sobe e a rosa vem logo atrás, como uma cortina */
+.intro-leave { animation: intro-up .7s .12s cubic-bezier(.8,0,.2,1) forwards; }
+.intro-leave .intro-curtain-pink { animation: intro-pink .55s cubic-bezier(.8,0,.2,1) forwards; }
+.intro-leave .intro-stage, .intro-leave .intro-skip { animation: intro-stage-out .25s ease-in forwards; }
+
+@keyframes intro-rise { to { transform: translateY(0); } }
+@keyframes intro-fade-up { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+@keyframes intro-pop { to { transform: scale(1); } }
+@keyframes intro-bar { 0% { transform: scaleX(0); transform-origin: left; } 55% { transform: scaleX(1); transform-origin: left; } 56% { transform-origin: right; } 100% { transform: scaleX(0); transform-origin: right; } }
+@keyframes intro-brand-out { to { opacity: 0; transform: translateY(-40px) scale(.92); filter: blur(6px); } }
+@keyframes intro-avatar { to { opacity: 1; transform: none; } }
+@keyframes intro-up { to { transform: translateY(-100%); } }
+@keyframes intro-pink { 0% { transform: translateY(100%); } 60% { transform: translateY(0); } 100% { transform: translateY(0); } }
+@keyframes intro-stage-out { to { opacity: 0; transform: translateY(-16px); } }
+
+/* Quem prefere menos movimento vê só a saudação, sem a sequência */
+@media (prefers-reduced-motion: reduce) {
+  .intro *, .intro { animation-duration: .01s !important; animation-delay: 0s !important; }
+  .intro-brand { display: none; }
+  .intro-leave { animation: intro-stage-out .3s forwards !important; }
+}
