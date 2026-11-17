@@ -24,6 +24,12 @@ model User {
   color       String   @default("#E6007E")
   createdAt   DateTime @default(now())
   deletedAt   DateTime? // usuário excluído (mantido só para o histórico)
+  // Avatar personalizado (DiceBear) — a cor do anel é o campo "color"
+  avatarStyle String?
+  avatarSeed  String?
+  avatarBg    String?
+  statusEmoji String?
+  onboardedAt DateTime? // já passou pela tela de boas-vindas
 
   jobsResponsible JobResponsible[]
   jobsRequested   Job[]           @relation("JobRequester")

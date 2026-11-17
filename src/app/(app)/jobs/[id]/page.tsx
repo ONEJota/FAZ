@@ -150,7 +150,7 @@ export default async function JobPage({ params, searchParams }: { params: Promis
               <p className="label">Responsáveis</p>
               <ul className="space-y-2">
                 {job.responsibles.map((r) => (
-                  <li key={r.userId} className="flex items-center gap-2 text-sm"><Avatar name={r.user.name} color={r.user.color} size={26} /> {r.user.name}</li>
+                  <li key={r.userId} className="flex items-center gap-2 text-sm"><Avatar user={r.user} size={28} /> {r.user.name}</li>
                 ))}
               </ul>
             </section>
@@ -270,7 +270,7 @@ export default async function JobPage({ params, searchParams }: { params: Promis
             <ul>
               {job.comments.map((c) => (
                 <li key={c.id} className="flex gap-3 border-t border-black/5 p-4 first:border-0">
-                  <Avatar name={c.user.name} color={c.user.color} />
+                  <Avatar user={c.user} size={34} />
                   <div><p className="text-sm"><b>{c.user.name}</b> <span className="text-xs text-black/45">{fmtDateTime(c.createdAt)}</span></p><p className="whitespace-pre-wrap text-sm">{c.body}</p></div>
                 </li>
               ))}

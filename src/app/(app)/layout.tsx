@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { requireUser, isManager, ROLES } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { logout } from "../actions/auth";
@@ -8,6 +9,8 @@ import { NavLinks } from "@/components/NavLinks";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const user = await requireUser();
+  // Primeiro acesso: montar o avatar antes de entrar
+  if (!user.onboardedAt) redirect("/boas-vindas");
   const manager = isManager(user);
   const running = await db.timeEntry.findFirst({
     where: { userId: user.id, endedAt: null },
@@ -50,14 +53,15 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             />
             <details className="relative">
               <summary className="flex cursor-pointer list-none items-center gap-2">
-                <Avatar name={user.name} color={user.color} />
+                <Avatar user={user} size={34} emoji={false} />
               </summary>
               <div className="absolute right-0 mt-2 w-56 rounded-2xl border border-black/5 bg-white p-2 text-ink shadow-lg">
                 <div className="px-2 py-1.5">
                   <p className="text-sm font-semibold">{user.name}</p>
                   <p className="text-xs text-black/50">{ROLES[user.role as keyof typeof ROLES]}</p>
                 </div>
-                <Link href="/perfil" className="block rounded-lg px-2 py-1.5 text-sm hover:bg-black/5">Meu perfil e senha</Link>
+                <Link href="/perfil" className="block rounded-lg px-2 py-1.5 text-sm hover:bg-black/5">Meu avatar e status</Link>
+                <Link href="/perfil" className="block rounded-lg px-2 py-1.5 text-sm hover:bg-black/5">Trocar senha</Link>
                 <form action={logout}>
                   <button className="w-full rounded-lg px-2 py-1.5 text-left text-sm text-red-600 hover:bg-red-50">Sair</button>
                 </form>

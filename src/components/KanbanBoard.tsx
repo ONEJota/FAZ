@@ -3,6 +3,8 @@ import Link from "next/link";
 import { useOptimistic, useTransition } from "react";
 import { DndContext, PointerSensor, useDraggable, useDroppable, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { setJobStatus } from "@/app/actions/jobs";
+import { Avatar } from "@/components/Avatar";
+import type { AvatarUser } from "@/lib/avatar";
 
 export type Card = {
   id: number;
@@ -16,7 +18,7 @@ export type Card = {
   statusName: string;
   statusColor: string;
   service: string;
-  people: { name: string; color: string }[];
+  people: AvatarUser[];
   openTasks: number;
 };
 export type Column = { id: string; title: string; color?: string; statusId?: number; cards: Card[] };
@@ -102,11 +104,9 @@ function KanbanCard({ card, draggable }: { card: Card; draggable: boolean }) {
       </Link>
       <p className="mt-0.5 truncate text-xs text-black/50">{card.client} · {card.service}</p>
       <div className="mt-2 flex items-center justify-between">
-        <span className="flex -space-x-1.5">
+        <span className="flex -space-x-1">
           {card.people.slice(0, 4).map((p) => (
-            <span key={p.name} title={p.name} className="inline-flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-bold text-white ring-2 ring-white" style={{ background: p.color }}>
-              {p.name.split(" ").map((x) => x[0]).slice(0, 2).join("")}
-            </span>
+            <Avatar key={p.name} user={p} size={26} />
           ))}
         </span>
         {card.openTasks > 0 && <span className="text-xs text-black/45">☑ {card.openTasks}</span>}

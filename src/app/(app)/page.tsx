@@ -129,7 +129,7 @@ export default async function Painel({ searchParams }: { searchParams: Promise<{
           <ul className="grid md:grid-cols-2">
             {comments.map((c) => (
               <li key={c.id} className="flex gap-3 border-t border-black/5 px-4 py-3">
-                <Avatar name={c.user.name} color={c.user.color} />
+                <Avatar user={c.user} size={34} />
                 <div className="min-w-0">
                   <p className="text-sm">
                     <b>{c.user.name}</b>{" "}
