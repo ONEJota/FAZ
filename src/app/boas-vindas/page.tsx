@@ -1,6 +1,7 @@
 import { requireUser } from "@/lib/auth";
 import { skipOnboarding } from "@/app/actions/perfil";
 import { AvatarEditor } from "@/components/AvatarEditor";
+import { AVATAR_CATALOG } from "@/lib/avatarCatalog";
 
 // Primeiro acesso: antes de entrar no FAZ, cada pessoa monta o próprio avatar.
 export default async function BoasVindas() {
@@ -24,8 +25,8 @@ export default async function BoasVindas() {
           <br />
           <span className="text-mona">Monte o seu avatar.</span>
         </h1>
-        <p className="mb-10 max-w-lg text-white/65">É ele que aparece na pauta, no Kanban e nos comentários. Escolha o estilo, o personagem, as cores e um emoji para dizer como você está.</p>
-        <AvatarEditor user={user} mode="inicio" dark />
+        <p className="mb-10 max-w-lg text-white/65">É ele que aparece na pauta, no Kanban e nos comentários. Escolha o estilo e monte peça por peça: cabelo, roupa, acessórios e cores. E um emoji para dizer como você está.</p>
+        <AvatarEditor user={user} catalog={AVATAR_CATALOG} mode="inicio" dark />
       </div>
     </main>
   );

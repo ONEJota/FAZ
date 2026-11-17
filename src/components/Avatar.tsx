@@ -17,7 +17,7 @@ export function Avatar({ user, size = 32, emoji }: { user: AvatarUser; size?: nu
       >
         {user.avatarStyle && user.avatarSeed ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={avatarUrl(user.avatarStyle, user.avatarSeed, user.avatarBg)} alt="" width={size} height={size} className="h-full w-full" loading="lazy" />
+          <img src={avatarUrl(user.avatarStyle, user.avatarSeed, user.avatarBg, user.avatarOptions)} alt="" width={size} height={size} className="h-full w-full" loading="lazy" />
         ) : (
           initials(user.name)
         )}

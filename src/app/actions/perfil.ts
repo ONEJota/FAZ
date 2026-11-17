@@ -3,7 +3,8 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
-import { AVATAR_BGS, RING_COLORS, STATUS_EMOJIS, isAvatarStyle } from "@/lib/avatar";
+import { AVATAR_BGS, RING_COLORS, STATUS_EMOJIS, decodeOptions, encodeOptions, isAvatarStyle } from "@/lib/avatar";
+import { sanitizeOptions } from "@/lib/avatarCatalog";
 
 /** Salva o avatar montado pela própria pessoa (perfil ou boas-vindas). */
 export async function saveAvatar(form: FormData) {
@@ -15,12 +16,14 @@ export async function saveAvatar(form: FormData) {
   const emoji = String(form.get("emoji") || "");
   const next = form.get("next") === "inicio" ? "/" : "/perfil?ok=avatar";
   if (!isAvatarStyle(style) || !seed) redirect(`/perfil?erro=${encodeURIComponent("Escolha um personagem.")}`);
+  const opts = encodeOptions(sanitizeOptions(style as Parameters<typeof sanitizeOptions>[0], decodeOptions(String(form.get("opts") || ""))));
   await db.user.update({
     where: { id: user.id },
     data: {
       avatarStyle: style,
       avatarSeed: seed,
       avatarBg: AVATAR_BGS.includes(bg) ? bg : null,
+      avatarOptions: opts || null,
       color: RING_COLORS.includes(ring) ? ring : user.color,
       statusEmoji: STATUS_EMOJIS.includes(emoji) ? emoji : null,
       onboardedAt: user.onboardedAt ?? new Date(),

@@ -52,7 +52,7 @@ export default async function Pauta({ searchParams }: { searchParams: Promise<SP
     statusName: j.status.name,
     statusColor: j.status.color,
     service: j.service.name,
-    people: j.responsibles.map(({ user: u }) => ({ name: u.name, color: u.color, avatarStyle: u.avatarStyle, avatarSeed: u.avatarSeed, avatarBg: u.avatarBg, statusEmoji: u.statusEmoji })),
+    people: j.responsibles.map(({ user: u }) => ({ name: u.name, color: u.color, avatarStyle: u.avatarStyle, avatarSeed: u.avatarSeed, avatarBg: u.avatarBg, avatarOptions: u.avatarOptions, statusEmoji: u.statusEmoji })),
     openTasks: j.tasks.length,
   }));
 

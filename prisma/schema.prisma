@@ -28,6 +28,7 @@ model User {
   avatarStyle String?
   avatarSeed  String?
   avatarBg    String?
+  avatarOptions String? // peças escolhidas (cabelo, roupa, acessórios...)
   statusEmoji String?
   onboardedAt DateTime? // já passou pela tela de boas-vindas
 

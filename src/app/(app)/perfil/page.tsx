@@ -2,6 +2,7 @@ import { requireUser, ROLES } from "@/lib/auth";
 import { ErrorBanner, PageHeader } from "@/components/ui";
 import { PasswordForm } from "@/components/PasswordForm";
 import { AvatarEditor } from "@/components/AvatarEditor";
+import { AVATAR_CATALOG } from "@/lib/avatarCatalog";
 
 export default async function Perfil({ searchParams }: { searchParams: Promise<{ ok?: string; erro?: string }> }) {
   const sp = await searchParams;
@@ -13,7 +14,7 @@ export default async function Perfil({ searchParams }: { searchParams: Promise<{
       {sp.ok === "avatar" && <div className="mb-4 rounded-xl border border-green-200 bg-green-50 px-4 py-2.5 text-sm text-green-800">Avatar salvo. 🎉</div>}
       <section className="card mb-6 p-5 md:p-7">
         <h2 className="mb-5 font-bold">Meu avatar</h2>
-        <AvatarEditor user={user} mode="perfil" />
+        <AvatarEditor user={user} catalog={AVATAR_CATALOG} mode="perfil" />
       </section>
       <div className="max-w-xl">
         <PasswordForm />

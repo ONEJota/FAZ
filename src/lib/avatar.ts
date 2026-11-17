@@ -26,6 +26,7 @@ export type AvatarUser = {
   avatarStyle?: string | null;
   avatarSeed?: string | null;
   avatarBg?: string | null;
+  avatarOptions?: string | null; // peças escolhidas, no formato "cabelo.valor~cor.valor"
   statusEmoji?: string | null;
 };
 
@@ -35,8 +36,26 @@ export const isAvatarStyle = (s: unknown): s is AvatarStyle => AVATAR_STYLES.som
  * Endereço da imagem do avatar. Tudo vai no caminho (e não em ?parâmetros) porque o cache
  * da Netlify ignora a query string: com ?s=…&seed=… todos recebiam o mesmo avatar.
  */
-export function avatarUrl(style: string, seed: string, bg?: string | null) {
-  return `/avatar/${style}/${bg || "x"}/${encodeURIComponent(seed)}.svg`;
+export function avatarUrl(style: string, seed: string, bg?: string | null, opts?: string | null) {
+  const base = `/avatar/${style}/${bg || "x"}/${encodeURIComponent(seed)}`;
+  return opts ? `${base}/${opts}.svg` : `${base}.svg`;
+}
+
+/** Peças escolhidas <-> texto curto que vai na URL e no banco ("hair.long01~hairColor.2c1b18"). */
+export function encodeOptions(o: Record<string, string>) {
+  return Object.entries(o)
+    .filter(([, v]) => v)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([k, v]) => `${k}.${v}`)
+    .join("~");
+}
+export function decodeOptions(s?: string | null): Record<string, string> {
+  const o: Record<string, string> = {};
+  for (const pair of (s || "").split("~")) {
+    const [k, v] = pair.split(".");
+    if (k && v && /^[A-Za-z0-9]{1,40}$/.test(k) && /^[A-Za-z0-9]{1,40}$/.test(v)) o[k] = v;
+  }
+  return o;
 }
 
 export function randomSeed() {
